@@ -29,13 +29,18 @@ class InvoicePanel(QtWidgets.QWidget):
         self.type_combo.addItems(["Sale", "Purchase"])
 
         self.party_combo = QtWidgets.QComboBox()
+        add_party_btn = QtWidgets.QPushButton("Add Party")
+        add_party_btn.clicked.connect(self._add_party)
+        party_layout = QtWidgets.QHBoxLayout()
+        party_layout.addWidget(self.party_combo)
+        party_layout.addWidget(add_party_btn)
 
         self.date_edit = QtWidgets.QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(date.today())
 
         form.addRow("Type", self.type_combo)
-        form.addRow("Party", self.party_combo)
+        form.addRow("Party", party_layout)
         form.addRow("Date", self.date_edit)
         layout.addLayout(form)
 
@@ -78,6 +83,17 @@ class InvoicePanel(QtWidgets.QWidget):
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             self._items = []
+
+    def _add_party(self) -> None:
+        from .party_dialog import PartyDialog
+
+        dlg = PartyDialog(self._db)
+        if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            self._load_parties()
+            # select last added party
+            parties = self._db.get_all_parties()
+            if parties:
+                self.party_combo.setCurrentIndex(len(parties))
 
     # ---- Table helpers ----
     def _add_line(self) -> None:

@@ -289,6 +289,29 @@ class DatabaseManager:
             self.conn.rollback()
             raise RuntimeError(f"Failed to save query: {exc}") from exc
 
+    def get_saved_queries(self) -> List[Dict[str, Any]]:
+        """Return list of saved queries."""
+        cur = self.conn.cursor()
+        try:
+            cur.execute("SELECT id, name, sql FROM SavedQueries")
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as exc:  # pragma: no cover - unexpected errors
+            raise RuntimeError(f"Failed to fetch saved queries: {exc}") from exc
+
+    def run_raw_query(self, sql: str) -> tuple[list[str], list[tuple]]:
+        """Execute a SELECT SQL statement and return (columns, rows)."""
+        if not sql.strip().lower().startswith("select"):
+            raise ValueError("Only SELECT queries are allowed")
+        cur = self.conn.cursor()
+        try:
+            cur.execute(sql)
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description or []]
+            return cols, rows
+        except sqlite3.Error as exc:
+            raise RuntimeError(f"Failed to execute query: {exc}") from exc
+
 
 CREATE_TABLE_QUERIES = [
     """CREATE TABLE IF NOT EXISTS Users(
