@@ -12,8 +12,8 @@ def create_manager(tmp_path):
 
 def test_run_raw_query(tmp_path):
     mgr = create_manager(tmp_path)
-    mgr.add_party("Cust")
-    cols, rows = mgr.run_raw_query("SELECT name FROM Parties")
+    mgr.add_customer("Cust")
+    cols, rows = mgr.run_raw_query("SELECT name FROM Customers")
     assert cols == ["name"]
     assert rows[0][0] == "Cust"
 
@@ -21,19 +21,20 @@ def test_run_raw_query(tmp_path):
 def test_run_raw_query_rejects_dml(tmp_path):
     mgr = create_manager(tmp_path)
     with pytest.raises(ValueError):
-        mgr.run_raw_query("DELETE FROM Parties")
+        mgr.run_raw_query("DELETE FROM Customers")
 
 
 def test_party_balance_logic(tmp_path):
     mgr = create_manager(tmp_path)
-    pid = mgr.add_party("A")
-    mgr.update_party_balance(pid, 50)
-    data = reporting.get_party_balances(mgr)
+    pid = mgr.add_customer("A")
+    mgr.update_customer_balance(pid, 50)
+    data = reporting.get_customer_balances(mgr)
     assert data[0]["status"] == "Receivable"
 
 
 def test_inventory_value(tmp_path):
     mgr = create_manager(tmp_path)
-    mgr.add_item("Item", "cat", 2.0, 5)
+    grower = mgr.add_customer("Grower", customer_type="Grower")
+    mgr.add_item("Item", 2.0, 5, grower_id=grower)
     data, total = reporting.get_inventory_values(mgr)
     assert total == 10.0

@@ -25,13 +25,13 @@ class ReceiptPrinter:
         self,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        party_id: Optional[int] = None,
+        customer_id: Optional[int] = None,
         inv_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         invoices = self._db.get_invoices(start_date, end_date)
         result: List[Dict[str, Any]] = []
         for inv in invoices:
-            if party_id and inv["party_id"] != party_id:
+            if customer_id and inv["customer_id"] != customer_id:
                 continue
             if inv_type and inv["type"] != inv_type:
                 continue
@@ -40,13 +40,13 @@ class ReceiptPrinter:
 
     # ---- pdf helpers ----
     def _summary_table(self, invoices: Iterable[Dict[str, Any]]) -> Table:
-        data = [["Date", "Invoice", "Party", "Total"]]
-        parties = {p["party_id"]: p["name"] for p in self._db.get_all_parties()}
+        data = [["Date", "Invoice", "Customer", "Total"]]
+        parties = {p["customer_id"]: p["name"] for p in self._db.get_all_customers()}
         for inv in invoices:
             data.append([
                 inv["date"],
                 str(inv["inv_id"]),
-                parties.get(inv["party_id"], ""),
+                parties.get(inv["customer_id"], ""),
                 f"{inv['total_amount']:.2f}",
             ])
         table = Table(data, colWidths=[80, 60, 200, 80])
@@ -74,10 +74,10 @@ class ReceiptPrinter:
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
         doc = SimpleDocTemplate(tmp.name, pagesize=A4)
         styles = getSampleStyleSheet()
-        parties = {p["party_id"]: p for p in self._db.get_all_parties()}
+        parties = {p["customer_id"]: p for p in self._db.get_all_customers()}
         story = []
         for inv in invoices:
-            party = parties.get(inv["party_id"], {})
+            party = parties.get(inv["customer_id"], {})
             story.append(Paragraph(f"Invoice {inv['inv_id']}", styles["Heading2"]))
             story.append(Paragraph(f"Date: {inv['date']}", styles["Normal"]))
             if party:
@@ -87,7 +87,7 @@ class ReceiptPrinter:
             for it in items:
                 data.append(
                     [
-                        str(it["item_id"]),
+                        f"{it['item_name']} ({it['grower_id']})",
                         str(it["quantity"]),
                         f"{it['unit_price']:.2f}",
                         f"{it['line_total']:.2f}",

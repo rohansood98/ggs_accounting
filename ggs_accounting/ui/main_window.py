@@ -55,7 +55,7 @@ class MainWindow(QtWidgets.QMainWindow):
         from .invoice_panel import InvoicePanel
         from .receipt_console import ReceiptConsole
         from .reports_panel import ReportsPanel
-        from .reports_party_balance import PartyBalancePanel
+        from .reports_party_balance import CustomerBalancePanel
         from .reports_inventory import InventoryValuationPanel
         from .settings_panel import SettingsPanel
 
@@ -63,7 +63,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stack.addTab(InvoicePanel(self._db), "Billing")
         self._stack.addTab(ReceiptConsole(self._db), "Receipts")
         self._stack.addTab(ReportsPanel(self._db), "SQL")
-        self._stack.addTab(PartyBalancePanel(self._db), "Party Balances")
+        self._stack.addTab(CustomerBalancePanel(self._db), "Customer Balances")
         self._stack.addTab(InventoryValuationPanel(self._db), "Inventory Value")
         self._stack.addTab(self._create_placeholder("Backup"), "Backup")
 

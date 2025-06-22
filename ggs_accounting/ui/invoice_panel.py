@@ -18,7 +18,7 @@ class InvoicePanel(QtWidgets.QWidget):
         self._logic = InvoiceLogic(db)
         self._items: List[Dict[str, Any]] = []
         self._init_ui()
-        self._load_parties()
+        self._load_customers()
         self._load_items()
 
     # ---- UI setup ----
@@ -31,8 +31,8 @@ class InvoicePanel(QtWidgets.QWidget):
 
         party_row = QtWidgets.QHBoxLayout()
         self.party_combo = QtWidgets.QComboBox()
-        add_party_btn = QtWidgets.QPushButton("Add Party")
-        add_party_btn.clicked.connect(self._add_party)
+        add_party_btn = QtWidgets.QPushButton("Add Customer")
+        add_party_btn.clicked.connect(self._add_customer)
         party_row.addWidget(self.party_combo)
         party_row.addWidget(add_party_btn)
 
@@ -41,7 +41,7 @@ class InvoicePanel(QtWidgets.QWidget):
         self.date_edit.setDate(date.today())
 
         form.addRow("Type", self.type_combo)
-        form.addRow("Party", party_row)
+        form.addRow("Customer", party_row)
         form.addRow("Date", self.date_edit)
         layout.addLayout(form)
 
@@ -69,16 +69,16 @@ class InvoicePanel(QtWidgets.QWidget):
         layout.addLayout(totals_layout)
 
     # ---- Data loading ----
-    def _load_parties(self) -> None:
+    def _load_customers(self) -> None:
         try:
-            parties = self._db.get_all_parties()
+            parties = self._db.get_all_customers()
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             parties = []
         self.party_combo.clear()
         self.party_combo.addItem("", None)
         for p in parties:
-            self.party_combo.addItem(p["name"], p["party_id"])
+            self.party_combo.addItem(p["name"], p["customer_id"])
 
     def _load_items(self) -> None:
         try:
@@ -87,14 +87,14 @@ class InvoicePanel(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             self._items = []
 
-    def _add_party(self) -> None:
-        from ggs_accounting.ui.party_dialog import PartyDialog
+    def _add_customer(self) -> None:
+        from ggs_accounting.ui.party_dialog import CustomerDialog
 
-        dlg = PartyDialog(self._db)
+        dlg = CustomerDialog(self._db)
         if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
-            self._load_parties()
-            # select last added party
-            parties = self._db.get_all_parties()
+            self._load_customers()
+            # select last added customer
+            parties = self._db.get_all_customers()
             if parties:
                 self.party_combo.setCurrentIndex(len(parties))
 
@@ -143,22 +143,24 @@ class InvoicePanel(QtWidgets.QWidget):
             if not item_name:
                 QtWidgets.QMessageBox.warning(self, "Validation", f"Item name required in row {row+1}")
                 return []
-            # Try to find item_id
             item = next((it for it in self._items if it["name"] == item_name), None)
             if item is None:
-                # Add new item to DB with default values
                 try:
-                    item_id = self._db.add_item(item_name, category="", price_excl_tax=cast(QtWidgets.QDoubleSpinBox, price_widget).value(), stock_qty=0.0, grower_id=None)
-                    # Reload items for future lookups
+                    self._db.add_item(
+                        item_name,
+                        price_excl_tax=cast(QtWidgets.QDoubleSpinBox, price_widget).value(),
+                        stock_qty=0.0,
+                        grower_id=None,
+                    )
                     self._load_items()
                 except Exception as exc:
-                    QtWidgets.QMessageBox.critical(self, "Error", f"Failed to add new item '{item_name}': {exc}")
+                    QtWidgets.QMessageBox.critical(
+                        self, "Error", f"Failed to add new item '{item_name}': {exc}"
+                    )
                     return []
-            else:
-                item_id = item["item_id"]
             quantity = float(cast(QtWidgets.QDoubleSpinBox, qty_widget).value())
             price = float(cast(QtWidgets.QDoubleSpinBox, price_widget).value())
-            items.append({"item_id": item_id, "quantity": quantity, "price": price})
+            items.append({"name": item_name, "grower_id": item.get("grower_id"), "quantity": quantity, "price": price})
         return items
 
     def _recalc_totals(self) -> None:
@@ -180,10 +182,10 @@ class InvoicePanel(QtWidgets.QWidget):
         if not items:
             QtWidgets.QMessageBox.warning(self, "Validation", "Add at least one item")
             return
-        party_id = self.party_combo.currentData()
+        customer_id = self.party_combo.currentData()
         inv_type = self.type_combo.currentText()
         try:
-            self._logic.create_invoice(inv_type, party_id, items, date=self.date_edit.date().toString("yyyy-MM-dd"))
+            self._logic.create_invoice(inv_type, customer_id, items, date=self.date_edit.date().toString("yyyy-MM-dd"))
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             return

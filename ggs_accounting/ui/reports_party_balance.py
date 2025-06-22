@@ -4,11 +4,11 @@ from PyQt6 import QtWidgets
 import pandas as pd
 
 from ggs_accounting.db.db_manager import DatabaseManager
-from ggs_accounting.models.reporting import get_party_balances
+from ggs_accounting.models.reporting import get_customer_balances
 
 
-class PartyBalancePanel(QtWidgets.QWidget):
-    """Display party-wise outstanding balances."""
+class CustomerBalancePanel(QtWidgets.QWidget):
+    """Display customer-wise outstanding balances."""
 
     def __init__(self, db: DatabaseManager) -> None:
         super().__init__()
@@ -28,7 +28,7 @@ class PartyBalancePanel(QtWidgets.QWidget):
         layout.addLayout(btns)
 
         self.table = QtWidgets.QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Party", "Balance", "Status"])
+        self.table.setHorizontalHeaderLabels(["Customer", "Balance", "Status"])
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         header = self.table.horizontalHeader()
         if header is not None:
@@ -37,7 +37,7 @@ class PartyBalancePanel(QtWidgets.QWidget):
 
     def _load_data(self) -> None:
         try:
-            data = get_party_balances(self._db)
+            data = get_customer_balances(self._db)
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             return

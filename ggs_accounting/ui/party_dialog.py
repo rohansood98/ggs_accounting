@@ -3,13 +3,13 @@ from PyQt6 import QtWidgets
 from ggs_accounting.db.db_manager import DatabaseManager
 
 
-class PartyDialog(QtWidgets.QDialog):
-    """Dialog for adding a new party."""
+class CustomerDialog(QtWidgets.QDialog):
+    """Dialog for adding a new customer."""
 
     def __init__(self, db: DatabaseManager) -> None:
         super().__init__()
         self._db = db
-        self.setWindowTitle("Add Party")
+        self.setWindowTitle("Add Customer")
 
         self.name_edit = QtWidgets.QLineEdit()
         self.contact_edit = QtWidgets.QLineEdit()
@@ -35,7 +35,7 @@ class PartyDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(self, "Validation", "Name required")
             return
         try:
-            self._db.add_party(name, self.contact_edit.text().strip())
+            self._db.add_customer(name, self.contact_edit.text().strip())
         except Exception as exc:  # pragma: no cover - unexpected errors
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             return

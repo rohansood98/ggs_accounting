@@ -21,13 +21,14 @@ def ensure_app():
 def test_summary_pdf(tmp_path):
     ensure_app()
     mgr = create_manager(tmp_path)
-    item = mgr.add_item("Apple", "Fruit", 10.0, 5)
-    party = mgr.add_party("Cust")
+    grower_id = mgr.add_customer("Grower", customer_type="Grower")
+    mgr.add_item("Apple", 10.0, 5, grower_id=grower_id)
+    customer = mgr.add_customer("Cust")
     mgr.create_invoice(
         "2024-01-01",
         "Sale",
-        party,
-        [{"item_id": item, "quantity": 2, "price": 10.0}],
+        customer,
+        [{"name": "Apple", "grower_id": grower_id, "quantity": 2, "price": 10.0}],
     )
     printer = ReceiptPrinter(mgr)
     invoices = printer.fetch_invoices("2024-01-01", "2024-01-02", None, None)
