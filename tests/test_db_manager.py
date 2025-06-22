@@ -34,7 +34,7 @@ def test_create_invoice(tmp_path):
         "2024-01-01",
         "Sale",
         party_id,
-        [{"item_id": item_id, "quantity": 2, "price": 10.0, "tax_amount": 1.0}],
+        [{"item_id": item_id, "quantity": 2, "price": 10.0}],
         is_credit=True,
     )
     assert any(inv["inv_id"] == inv_id for inv in mgr.get_invoices())
