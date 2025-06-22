@@ -64,15 +64,33 @@ class DatabaseManager:
             self.conn.rollback()
             raise RuntimeError(f"Failed to create user: {exc}") from exc
 
-    def verify_user(self, username: str, password: str) -> Optional[str]:
+    def get_user(self, username: str) -> Optional["User"]:
+        from ggs_accounting.models.auth import User
+
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT password_hash, role FROM Users WHERE username = ?", (username,))
+            cur.execute(
+                "SELECT username, password_hash, role FROM Users WHERE username=?",
+                (username,),
+            )
             row = cur.fetchone()
         except sqlite3.Error as exc:
+            raise RuntimeError(f"Failed to fetch user: {exc}") from exc
+        if row:
+            return User(
+                username=row["username"],
+                password_hash=row["password_hash"],
+                role=row["role"],
+            )
+        return None
+
+    def verify_user(self, username: str, password: str) -> Optional[str]:
+        try:
+            user = self.get_user(username)
+        except RuntimeError as exc:
             raise RuntimeError(f"Failed to verify user: {exc}") from exc
-        if row and verify_password(password, row[0]):
-            return row[1]
+        if user and user.verify_password(password):
+            return user.role
         return None
 
     # ---- Items ----

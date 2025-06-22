@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "PyQt6",
     "pytest",
+    "pydantic",
 ]
 
 [tool.setuptools.packages.find]
