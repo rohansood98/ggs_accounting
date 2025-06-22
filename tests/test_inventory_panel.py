@@ -20,8 +20,9 @@ def ensure_app():
 def test_inventory_loads_items(tmp_path):
     ensure_app()
     mgr = create_manager(tmp_path)
-    mgr.add_item("Apple", "Fruit", 10.0, 5)
-    mgr.add_item("Carrot", "Vegetable", 5.0, 10)
+    cust = mgr.add_customer("Grower", customer_type="Grower")
+    mgr.add_item("Apple", "APL", 10.0, 5, customer_id=cust)
+    mgr.add_item("Carrot", "CRT", 5.0, 10, customer_id=cust)
     panel = InventoryPanel(mgr)
     assert panel.table.rowCount() == 2
 
@@ -29,8 +30,9 @@ def test_inventory_loads_items(tmp_path):
 def test_inventory_filter(tmp_path):
     ensure_app()
     mgr = create_manager(tmp_path)
-    mgr.add_item("Apple", "Fruit", 10.0, 5)
-    mgr.add_item("Carrot", "Vegetable", 5.0, 10)
+    cust = mgr.add_customer("Grower", customer_type="Grower")
+    mgr.add_item("Apple", "APL", 10.0, 5, customer_id=cust)
+    mgr.add_item("Carrot", "CRT", 5.0, 10, customer_id=cust)
     panel = InventoryPanel(mgr)
     panel.search_edit.setText("apple")
     QtWidgets.QApplication.processEvents()

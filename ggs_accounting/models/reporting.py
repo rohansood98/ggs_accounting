@@ -50,7 +50,12 @@ def get_customer_balances(db: DatabaseManager) -> List[Dict[str, Any]]:
 
 def get_inventory_values(db: DatabaseManager) -> Tuple[List[Dict[str, Any]], float]:
     cur = db.conn.cursor()
-    cur.execute("SELECT name, stock_qty, price_excl_tax FROM Items")
+    cur.execute(
+        """
+        SELECT Items.name, Inventory.stock_qty, Inventory.price_excl_tax
+        FROM Inventory JOIN Items ON Inventory.item_id = Items.item_id
+        """
+    )
     rows = cur.fetchall()
     total_value = 0.0
     result: List[Dict[str, Any]] = []

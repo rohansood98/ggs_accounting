@@ -18,26 +18,27 @@ def test_init_creates_tables_and_admin(tmp_path):
 def test_item_crud(tmp_path):
     mgr = create_manager(tmp_path)
     customer_id = mgr.add_customer("Grower", customer_type="Grower")
-    mgr.add_item("Apple", 10.0, 5, customer_id=customer_id)
+    item_id = mgr.add_item("Apple", "APL", 10.0, 5, customer_id=customer_id)
     items = mgr.get_all_items()
-    assert any(i["name"] == "Apple" for i in items)
-    mgr.update_item("Apple", 1, stock_qty=10)
+    assert any(i["item_id"] == item_id for i in items)
+    mgr.update_item(item_id, customer_id, stock_qty=10)
     assert mgr.get_all_items()[0]["stock_qty"] == 10
-    mgr.delete_item("Apple", 1)
+    mgr.delete_item(item_id, customer_id)
     assert mgr.get_all_items() == []
 
 
 def test_create_invoice(tmp_path):
     mgr = create_manager(tmp_path)
     customer_id = mgr.add_customer("Grower", customer_type="Grower")
-    mgr.add_item("Apple", 10.0, 5, customer_id=customer_id)
+    item_id = mgr.add_item("Apple", "APL", 10.0, 5, customer_id=customer_id)
     buyer_id = mgr.add_customer("Customer")
     inv_id = mgr.create_invoice(
         "2024-01-01",
         "Sale",
         buyer_id,
-        [{"name": "Apple", "customer_id": customer_id, "quantity": 2, "price": 10.0}],
+        [{"item_id": item_id, "customer_id": customer_id, "quantity": 2, "price": 10.0}],
         is_credit=True,
+        amount_paid=0.0,
     )
     assert any(inv["inv_id"] == inv_id for inv in mgr.get_invoices())
     items = mgr.get_invoice_items(inv_id)

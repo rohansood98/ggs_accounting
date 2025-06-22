@@ -97,60 +97,88 @@ class DatabaseManager:
     def add_item(
         self,
         name: str,
+        item_code: str,
         price_excl_tax: float,
         stock_qty: float,
-        customer_id: Optional[int] = None,
-    ) -> None:
+        customer_id: int,
+    ) -> int:
+        """Add a global item if needed and create an inventory record."""
         name = camel_case(name)
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO Items (name, customer_id, price_excl_tax, stock_qty) VALUES (?, ?, ?, ?)",
-                (name, customer_id, price_excl_tax, stock_qty),
+                "INSERT OR IGNORE INTO Items (name, item_code) VALUES (?, ?)",
+                (name, item_code),
+            )
+            cur.execute("SELECT item_id FROM Items WHERE name=?", (name,))
+            row = cur.fetchone()
+            if row is None:
+                raise RuntimeError("Failed to retrieve item_id after insert")
+            item_id = int(row["item_id"])
+            cur.execute(
+                "INSERT INTO Inventory (customer_id, item_id, price_excl_tax, stock_qty) VALUES (?, ?, ?, ?)",
+                (customer_id, item_id, price_excl_tax, stock_qty),
             )
             self.conn.commit()
+            return item_id
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to add item: {exc}") from exc
 
-    def update_item(self, name: str, customer_id: int, **kwargs) -> None:
-        allowed = {"name", "customer_id", "price_excl_tax", "stock_qty"}
+    def update_item(self, item_id: int, customer_id: int, **kwargs) -> None:
+        """Update item or inventory fields."""
+        item_fields = {}
+        inv_fields = {}
         if "name" in kwargs:
-            kwargs["name"] = camel_case(str(kwargs["name"]))
-        fields = [f"{k}=?" for k in kwargs if k in allowed]
-        values = [kwargs[k] for k in kwargs if k in allowed]
-        if not fields:
-            return
-        values.extend([name, customer_id])
+            item_fields["name"] = camel_case(str(kwargs["name"]))
+        if "item_code" in kwargs:
+            item_fields["item_code"] = kwargs["item_code"]
+        for key in ("price_excl_tax", "stock_qty"):
+            if key in kwargs:
+                inv_fields[key] = kwargs[key]
         cur = self.conn.cursor()
         try:
-            cur.execute(
-                f"UPDATE Items SET {', '.join(fields)} WHERE name=? AND customer_id=?",
-                values,
-            )
+            if item_fields:
+                sets = ", ".join(f"{k}=?" for k in item_fields)
+                cur.execute(
+                    f"UPDATE Items SET {sets} WHERE item_id=?",
+                    [*item_fields.values(), item_id],
+                )
+            if inv_fields:
+                sets = ", ".join(f"{k}=?" for k in inv_fields)
+                cur.execute(
+                    f"UPDATE Inventory SET {sets} WHERE item_id=? AND customer_id=?",
+                    [*inv_fields.values(), item_id, customer_id],
+                )
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to update item: {exc}") from exc
 
-    def delete_item(self, name: str, customer_id: int) -> None:
+    def delete_item(self, item_id: int, customer_id: int) -> None:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "DELETE FROM Items WHERE name=? AND customer_id=?",
-                (name, customer_id),
+                "DELETE FROM Inventory WHERE item_id=? AND customer_id=?",
+                (item_id, customer_id),
             )
+            cur.execute(
+                "SELECT COUNT(*) FROM Inventory WHERE item_id=?",
+                (item_id,),
+            )
+            if cur.fetchone()[0] == 0:
+                cur.execute("DELETE FROM Items WHERE item_id=?", (item_id,))
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to delete item: {exc}") from exc
 
-    def update_item_stock(self, name: str, customer_id: int, change: float) -> None:
+    def update_item_stock(self, item_id: int, customer_id: int, change: float) -> None:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "UPDATE Items SET stock_qty = stock_qty + ? WHERE name=? AND customer_id=?",
-                (change, name, customer_id),
+                "UPDATE Inventory SET stock_qty = stock_qty + ? WHERE item_id=? AND customer_id=?",
+                (change, item_id, customer_id),
             )
             self.conn.commit()
         except sqlite3.Error as exc:
@@ -158,9 +186,16 @@ class DatabaseManager:
             raise RuntimeError(f"Failed to update item stock: {exc}") from exc
 
     def get_all_items(self) -> List[Dict[str, Any]]:
+        """Return joined inventory records with item details."""
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT * FROM Items")
+            cur.execute(
+                """
+                SELECT Inventory.customer_id, Inventory.price_excl_tax, Inventory.stock_qty,
+                       Items.item_id, Items.name, Items.item_code
+                FROM Inventory JOIN Items ON Inventory.item_id = Items.item_id
+                """
+            )
             rows = cur.fetchall()
             return [dict(row) for row in rows]
         except sqlite3.Error as exc:
@@ -229,6 +264,7 @@ class DatabaseManager:
         customer_id: Optional[int],
         items: Iterable[Dict[str, Any]],
         is_credit: bool = False,
+        amount_paid: float = 0.0,
     ) -> int:
         cur = self.conn.cursor()
         try:
@@ -243,11 +279,18 @@ class DatabaseManager:
             if inv_id is None:
                 raise RuntimeError("Failed to retrieve lastrowid after creating invoice.")
             for item in items:
+                item_id = item.get("item_id")
+                if item_id is None:
+                    cur.execute("SELECT item_id FROM Items WHERE name=?", (item["name"],))
+                    row = cur.fetchone()
+                    if row is None:
+                        raise RuntimeError("Unknown item")
+                    item_id = int(row["item_id"])
                 cur.execute(
-                    "INSERT INTO InvoiceItems (inv_id, item_name, customer_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO InvoiceItems (inv_id, item_id, customer_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)",
                     (
                         inv_id,
-                        item["name"],
+                        item_id,
                         item["customer_id"],
                         item["quantity"],
                         item["price"],
@@ -257,7 +300,7 @@ class DatabaseManager:
             if is_credit and customer_id:
                 cur.execute(
                     "UPDATE Customers SET balance = balance + ? WHERE customer_id=?",
-                    (subtotal, customer_id),
+                    (subtotal - amount_paid, customer_id),
                 )
             self.conn.commit()
             return inv_id
@@ -282,11 +325,54 @@ class DatabaseManager:
     def get_invoice_items(self, inv_id: int) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT * FROM InvoiceItems WHERE inv_id=?", (inv_id,))
+            cur.execute(
+                """
+                SELECT InvoiceItems.*, Items.name
+                FROM InvoiceItems
+                JOIN Items ON InvoiceItems.item_id = Items.item_id
+                WHERE inv_id=?
+                """,
+                (inv_id,),
+            )
             rows = cur.fetchall()
             return [dict(row) for row in rows]
         except sqlite3.Error as exc:
             raise RuntimeError(f"Failed to fetch invoice items: {exc}") from exc
+
+    # ---- Payments ----
+    def record_payment(self, customer_id: int, amount: float, date: str) -> int:
+        """Record a payment and update balance."""
+        cur = self.conn.cursor()
+        try:
+            cur.execute(
+                "INSERT INTO Payments (customer_id, date, amount) VALUES (?, ?, ?)",
+                (customer_id, date, amount),
+            )
+            cur.execute(
+                "UPDATE Customers SET balance = balance - ? WHERE customer_id=?",
+                (amount, customer_id),
+            )
+            self.conn.commit()
+            if cur.lastrowid is None:
+                raise RuntimeError("Failed to retrieve lastrowid after payment")
+            return cur.lastrowid
+        except sqlite3.Error as exc:
+            self.conn.rollback()
+            raise RuntimeError(f"Failed to record payment: {exc}") from exc
+
+    def get_payments(self, customer_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        cur = self.conn.cursor()
+        sql = "SELECT * FROM Payments"
+        params: List[Any] = []
+        if customer_id is not None:
+            sql += " WHERE customer_id=?"
+            params.append(customer_id)
+        try:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as exc:
+            raise RuntimeError(f"Failed to fetch payments: {exc}") from exc
 
     # ---- Settings ----
     def set_setting(self, key: str, value: str) -> None:
@@ -356,12 +442,19 @@ CREATE_TABLE_QUERIES = [
         role TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS Items(
-        name TEXT NOT NULL,
+        item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        item_code TEXT NOT NULL UNIQUE
+    )""",
+    """CREATE TABLE IF NOT EXISTS Inventory(
+        inventory_id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER NOT NULL,
+        item_id INTEGER NOT NULL,
         price_excl_tax REAL NOT NULL,
         stock_qty REAL NOT NULL DEFAULT 0,
-        PRIMARY KEY(name, customer_id),
-        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id),
+        FOREIGN KEY(item_id) REFERENCES Items(item_id),
+        UNIQUE(customer_id, item_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Customers(
         customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -383,13 +476,14 @@ CREATE_TABLE_QUERIES = [
     """CREATE TABLE IF NOT EXISTS InvoiceItems(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         inv_id INTEGER NOT NULL,
-        item_name TEXT NOT NULL,
+        item_id INTEGER NOT NULL,
         customer_id INTEGER NOT NULL,
         quantity REAL NOT NULL,
         unit_price REAL NOT NULL,
         line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
-        FOREIGN KEY(item_name, customer_id) REFERENCES Items(name, customer_id)
+        FOREIGN KEY(item_id) REFERENCES Items(item_id),
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,
@@ -399,6 +493,13 @@ CREATE_TABLE_QUERIES = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         sql TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS Payments(
+        payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        amount REAL NOT NULL,
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )""",
 ]
 

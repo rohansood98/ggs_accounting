@@ -40,6 +40,10 @@ class InvoicePanel(QtWidgets.QWidget):
         form.addRow("Date", self.date_edit)
         layout.addLayout(form)
 
+        add_line_btn = QtWidgets.QPushButton("Add Line")
+        add_line_btn.clicked.connect(self._add_line)
+        layout.addWidget(add_line_btn)
+
         # Table: Item, Customer, Qty, Price, Total, Delete
         self.table = QtWidgets.QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(["Item", "Customer", "Qty", "Price (₹)", "Total (₹)", "Delete"])
@@ -49,19 +53,20 @@ class InvoicePanel(QtWidgets.QWidget):
         layout.addWidget(self.table)
 
         buttons = QtWidgets.QHBoxLayout()
-        add_line_btn = QtWidgets.QPushButton("Add Line")
         save_btn = QtWidgets.QPushButton("Save")
-        add_line_btn.clicked.connect(self._add_line)
         save_btn.clicked.connect(self._save_invoice)
-        buttons.addWidget(add_line_btn)
         buttons.addStretch()
         buttons.addWidget(save_btn)
         layout.addLayout(buttons)
 
-        totals_layout = QtWidgets.QHBoxLayout()
+        totals_layout = QtWidgets.QFormLayout()
+        self.amount_paid = QtWidgets.QDoubleSpinBox()
+        self.amount_paid.setMaximum(1e9)
+        self.amount_paid.setPrefix("₹")
         self.subtotal_label = QtWidgets.QLabel("Subtotal: 0.00")
-        totals_layout.addStretch()
-        totals_layout.addWidget(self.subtotal_label)
+        self.due_label = QtWidgets.QLabel("Due: 0.00")
+        totals_layout.addRow("Paid", self.amount_paid)
+        totals_layout.addRow(self.subtotal_label, self.due_label)
         layout.addLayout(totals_layout)
 
     # ---- Data loading ----
@@ -164,7 +169,13 @@ class InvoicePanel(QtWidgets.QWidget):
                 ans = QtWidgets.QMessageBox.question(self, "Add Item?", f"Item '{item_name}' not found. Add new?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
                 if ans == QtWidgets.QMessageBox.StandardButton.Yes:
                     try:
-                        self._db.add_item(item_name, price_excl_tax=cast(QtWidgets.QDoubleSpinBox, price_widget).value(), stock_qty=0.0)
+                        self._db.add_item(
+                            item_name,
+                            "AUTO",
+                            price_excl_tax=cast(QtWidgets.QDoubleSpinBox, price_widget).value(),
+                            stock_qty=0.0,
+                            customer_id=customer["customer_id"],
+                        )
                         self._load_items()
                         item = next((it for it in self._items if it["name"] == item_name), None)
                     except Exception as exc:
@@ -189,7 +200,10 @@ class InvoicePanel(QtWidgets.QWidget):
             subtotal += total
             item = QtWidgets.QTableWidgetItem(f"₹{total:.2f}")
             self.table.setItem(row, 4, item)
+        paid = self.amount_paid.value() if hasattr(self, "amount_paid") else 0.0
+        due = subtotal - paid
         self.subtotal_label.setText(f"Subtotal: ₹{subtotal:.2f}")
+        self.due_label.setText(f"Due: ₹{due:.2f}")
 
     # ---- Save ----
     def _save_invoice(self) -> None:
@@ -202,11 +216,19 @@ class InvoicePanel(QtWidgets.QWidget):
         # Use the customer of the first row for the invoice (or None)
         customer_id = items[0]["customer_id"] if items else None
         try:
-            self._logic.create_invoice(inv_type, customer_id, items, date=date_str)
+            self._logic.create_invoice(
+                inv_type,
+                customer_id,
+                items,
+                date=date_str,
+                is_credit=True,
+                amount_paid=self.amount_paid.value(),
+            )
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             return
         self.table.setRowCount(0)
         self._recalc_totals()
+        self.amount_paid.setValue(0.0)
         QtWidgets.QMessageBox.information(self, "Saved", "Invoice saved")
 
