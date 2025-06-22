@@ -38,3 +38,15 @@ def test_inventory_value(tmp_path):
     mgr.add_item("Item", "ITM", 2.0, 5, customer_id=customer_id)
     data, total = reporting.get_inventory_values(mgr)
     assert total == 10.0
+
+
+def test_inventory_value_by_customer(tmp_path):
+    mgr = create_manager(tmp_path)
+    c1 = mgr.add_customer("G1", customer_type="Grower")
+    c2 = mgr.add_customer("G2", customer_type="Grower")
+    mgr.add_item("Apple", "APL", 2.0, 5, customer_id=c1)
+    mgr.add_item("Banana", "BAN", 3.0, 4, customer_id=c2)
+    data, total = reporting.get_inventory_values(mgr, item_id=None)
+    names = {d["name"] for d in data}
+    assert names == {"G1", "G2"}
+    assert total == pytest.approx(5 * 2.0 + 4 * 3.0)

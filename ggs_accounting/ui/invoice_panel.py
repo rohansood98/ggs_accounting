@@ -18,6 +18,8 @@ class InvoicePanel(QtWidgets.QWidget):
         self._logic = InvoiceLogic(db)
         self._items: List[Dict[str, Any]] = []
         self._customers: List[Dict[str, Any]] = []
+        self._buyers: List[Dict[str, Any]] = []
+        self._growers: List[Dict[str, Any]] = []
         self._init_ui()
         self._load_customers()
         self._load_items()
@@ -36,8 +38,11 @@ class InvoicePanel(QtWidgets.QWidget):
         self.date_edit = QtWidgets.QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(date.today())
+        self.buyer_combo = QtWidgets.QComboBox()
+        self.buyer_combo.setEditable(True)
         form.addRow("Type", self.type_combo)
         form.addRow("Date", self.date_edit)
+        form.addRow("Buyer", self.buyer_combo)
         layout.addLayout(form)
 
         add_line_btn = QtWidgets.QPushButton("Add Line")
@@ -72,10 +77,15 @@ class InvoicePanel(QtWidgets.QWidget):
     # ---- Data loading ----
     def _load_customers(self) -> None:
         try:
-            self._customers = self._db.get_all_customers()
+            all_cust = self._db.get_all_customers()
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
-            self._customers = []
+            all_cust = []
+        self._customers = all_cust
+        self._growers = [c for c in all_cust if c.get("customer_type") == "Grower"]
+        self._buyers = [c for c in all_cust if c.get("customer_type") != "Grower"]
+        self.buyer_combo.clear()
+        self.buyer_combo.addItems([b["name"] for b in self._buyers])
 
     def _load_items(self) -> None:
         try:
@@ -103,7 +113,7 @@ class InvoicePanel(QtWidgets.QWidget):
         # Customer dropdown (per row, but not tied to item)
         customer_combo = QtWidgets.QComboBox()
         customer_combo.setEditable(True)
-        customer_combo.addItems([c["name"] for c in self._customers])
+        customer_combo.addItems([c["name"] for c in self._growers])
         customer_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
         qty_spin = QtWidgets.QDoubleSpinBox()
         qty_spin.setMaximum(1e6)
@@ -150,7 +160,7 @@ class InvoicePanel(QtWidgets.QWidget):
                 QtWidgets.QMessageBox.warning(self, "Validation", f"Customer required in row {row+1}")
                 return []
             # Find or add customer
-            customer = next((c for c in self._customers if c["name"] == customer_name), None)
+            customer = next((c for c in self._growers if c["name"] == customer_name), None)
             if customer is None:
                 ans = QtWidgets.QMessageBox.question(self, "Add Customer?", f"Customer '{customer_name}' not found. Add new?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
                 if ans == QtWidgets.QMessageBox.StandardButton.Yes:
@@ -159,7 +169,7 @@ class InvoicePanel(QtWidgets.QWidget):
                     dlg.name_edit.setText(customer_name)
                     if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
                         self._load_customers()
-                        customer = next((c for c in self._customers if c["name"] == customer_name), None)
+                        customer = next((c for c in self._growers if c["name"] == customer_name), None)
                 if customer is None:
                     QtWidgets.QMessageBox.warning(self, "Validation", f"Customer '{customer_name}' not found.")
                     return []
@@ -213,8 +223,12 @@ class InvoicePanel(QtWidgets.QWidget):
             return
         inv_type = self.type_combo.currentText()
         date_str = self.date_edit.date().toString("yyyy-MM-dd")
-        # Use the customer of the first row for the invoice (or None)
-        customer_id = items[0]["customer_id"] if items else None
+        buyer_name = self.buyer_combo.currentText().strip()
+        buyer = next((b for b in self._buyers if b["name"] == buyer_name), None)
+        if buyer is None:
+            QtWidgets.QMessageBox.warning(self, "Validation", "Select buyer")
+            return
+        customer_id = buyer["customer_id"]
         try:
             self._logic.create_invoice(
                 inv_type,

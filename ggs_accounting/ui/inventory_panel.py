@@ -108,7 +108,9 @@ class InventoryPanel(QtWidgets.QWidget):
         super().__init__()
         self._db = db
         self._items: List[Dict[str, Any]] = []
+        self._customers: List[Dict[str, Any]] = []
         self._init_ui()
+        self._load_customers()
         self._load_items()
 
     def _init_ui(self) -> None:
@@ -145,7 +147,16 @@ class InventoryPanel(QtWidgets.QWidget):
             layout.addWidget(note)
 
     # ---- UI helpers ----
+    def _load_customers(self) -> None:
+        """Load growers for customer lookups."""
+        try:
+            self._customers = self._db.get_customers_by_type("Grower")
+        except Exception as exc:  # pragma: no cover - unexpected errors
+            QtWidgets.QMessageBox.critical(self, "Error", str(exc))
+            self._customers = []
+
     def _load_items(self) -> None:
+        self._load_customers()
         try:
             self._items = self._db.get_all_items()
         except Exception as exc:  # pragma: no cover - unexpected errors
