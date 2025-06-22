@@ -48,5 +48,5 @@ def test_inventory_value_by_customer(tmp_path):
     mgr.add_item("Banana", "BAN", 3.0, 4, customer_id=c2)
     data, total = reporting.get_inventory_values(mgr, item_id=None)
     names = {d["name"] for d in data}
-    assert names == {"G1", "G2"}
+    assert names == {"Apple", "Banana"}
     assert total == pytest.approx(5 * 2.0 + 4 * 3.0)

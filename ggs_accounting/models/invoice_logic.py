@@ -45,15 +45,23 @@ class InvoiceLogic:
             price_excl_tax = item.get("price_excl_tax")
             if price_excl_tax is None:
                 # Fallback: fetch from Inventory
+                lookup_id = item.get("source_id") if inv_type == "Sale" else item.get("customer_id")
                 row = self._db.conn.execute(
                     "SELECT price_excl_tax FROM Inventory WHERE item_id=? AND customer_id=? ORDER BY inventory_id DESC LIMIT 1",
-                    (item_id, item["customer_id"]),
+                    (item_id, lookup_id),
                 ).fetchone()
                 if row:
                     price_excl_tax = row["price_excl_tax"]
                 else:
                     raise KeyError("price_excl_tax")
-            change = item["quantity"] if inv_type == "Purchase" else -item["quantity"]
-            self._db.update_item_stock(item_id, item["customer_id"], price_excl_tax, change)
+            if inv_type == "Purchase":
+                party_id = item.get("customer_id")
+                change = item["quantity"]
+            else:
+                party_id = item.get("source_id")
+                change = -item["quantity"]
+            if party_id is None:
+                raise RuntimeError("Missing inventory party reference")
+            self._db.update_item_stock(item_id, party_id, price_excl_tax, change)
         return inv_id
 

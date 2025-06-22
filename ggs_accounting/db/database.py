@@ -49,18 +49,28 @@ CREATE_TABLE_QUERIES = [
         is_credit INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )""",
-    # InvoiceItems: inv_id, item_id, customer_id, quantity, unit_price, line_total
+    # InvoiceItems: inv_id, item_id, customer_id, source_id, quantity, unit_price, line_total
     """CREATE TABLE IF NOT EXISTS InvoiceItems(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         inv_id INTEGER NOT NULL,
         item_id INTEGER NOT NULL,
         customer_id INTEGER NOT NULL,
+        source_id INTEGER,
         quantity REAL NOT NULL,
         unit_price REAL NOT NULL,
         line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
         FOREIGN KEY(item_id) REFERENCES Items(item_id),
-        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id),
+        FOREIGN KEY(source_id) REFERENCES Customers(customer_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS Sales(
+        inv_id INTEGER PRIMARY KEY,
+        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS Purchases(
+        inv_id INTEGER PRIMARY KEY,
+        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,

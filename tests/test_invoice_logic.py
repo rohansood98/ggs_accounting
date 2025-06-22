@@ -21,7 +21,7 @@ def test_invoice_logic_updates_stock(tmp_path):
     logic.create_invoice(
         "Sale",
         buyer_id,
-        [{"item_id": item_id, "customer_id": customer_id, "quantity": 4, "price": 5.0}],
+        [{"item_id": item_id, "customer_id": buyer_id, "source_id": customer_id, "quantity": 4, "price": 5.0}],
         date="2024-01-02",
         is_credit=True,
         amount_paid=0.0,
