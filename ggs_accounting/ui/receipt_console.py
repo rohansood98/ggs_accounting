@@ -17,7 +17,7 @@ class ReceiptConsole(QtWidgets.QWidget):
         self._db = db
         self._printer = ReceiptPrinter(db)
         self._init_ui()
-        self._load_parties()
+        self._load_customers()
 
     def _init_ui(self) -> None:
         layout = QtWidgets.QVBoxLayout(self)
@@ -38,7 +38,7 @@ class ReceiptConsole(QtWidgets.QWidget):
 
         form.addRow("From", self.from_date)
         form.addRow("To", self.to_date)
-        form.addRow("Party", self.party_combo)
+        form.addRow("Customer", self.party_combo)
         form.addRow("Type", self.type_combo)
         form.addRow("Format", self.format_combo)
         layout.addLayout(form)
@@ -59,16 +59,16 @@ class ReceiptConsole(QtWidgets.QWidget):
             header.setStretchLastSection(True)
         layout.addWidget(self.summary_table)
 
-    def _load_parties(self) -> None:
+    def _load_customers(self) -> None:
         self.party_combo.clear()
         self.party_combo.addItem("All", None)
         try:
-            parties = self._db.get_all_parties()
+            parties = self._db.get_all_customers()
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             return
         for p in parties:
-            self.party_combo.addItem(p["name"], p["party_id"])
+            self.party_combo.addItem(p["name"], p["customer_id"])
 
     def _fetch(self) -> list:
         start = self.from_date.date().toString("yyyy-MM-dd")
@@ -82,11 +82,11 @@ class ReceiptConsole(QtWidgets.QWidget):
     def _show(self) -> None:
         invoices = self._fetch()
         self.summary_table.setRowCount(len(invoices))
-        parties = {p["party_id"]: p["name"] for p in self._db.get_all_parties()}
+        parties = {p["customer_id"]: p["name"] for p in self._db.get_all_customers()}
         for row, inv in enumerate(invoices):
             self.summary_table.setItem(row, 0, QtWidgets.QTableWidgetItem(inv["date"]))
             self.summary_table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(inv["inv_id"])))
-            self.summary_table.setItem(row, 2, QtWidgets.QTableWidgetItem(parties.get(inv["party_id"], "")))
+            self.summary_table.setItem(row, 2, QtWidgets.QTableWidgetItem(parties.get(inv["customer_id"], "")))
             self.summary_table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"₹{inv['total_amount']:.2f}"))
         self.summary_table.resizeColumnsToContents()
 

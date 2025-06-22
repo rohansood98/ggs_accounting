@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from ggs_accounting.utils import hash_password, verify_password
+from ggs_accounting.utils import hash_password, verify_password, camel_case
 
 
 class DatabaseManager:
@@ -94,53 +94,61 @@ class DatabaseManager:
         return None
 
     # ---- Items ----
-    def add_item(self, name: str, category: str, price_excl_tax: float, stock_qty: float, grower_id: Optional[int] = None) -> int:
+    def add_item(
+        self,
+        name: str,
+        price_excl_tax: float,
+        stock_qty: float,
+        grower_id: Optional[int] = None,
+    ) -> None:
+        name = camel_case(name)
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO Items (name, category, price_excl_tax, stock_qty, grower_id) VALUES (?, ?, ?, ?, ?)",
-                (name, category, price_excl_tax, stock_qty, grower_id),
+                "INSERT INTO Items (name, grower_id, price_excl_tax, stock_qty) VALUES (?, ?, ?, ?)",
+                (name, grower_id, price_excl_tax, stock_qty),
             )
             self.conn.commit()
-            lastrowid = cur.lastrowid
-            if lastrowid is None:
-                raise RuntimeError("Failed to retrieve lastrowid after adding item.")
-            return lastrowid
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to add item: {exc}") from exc
 
-    def update_item(self, item_id: int, **kwargs) -> None:
-        allowed = {"name", "category", "price_excl_tax", "stock_qty", "grower_id"}
+    def update_item(self, name: str, grower_id: int, **kwargs) -> None:
+        allowed = {"name", "grower_id", "price_excl_tax", "stock_qty"}
+        if "name" in kwargs:
+            kwargs["name"] = camel_case(str(kwargs["name"]))
         fields = [f"{k}=?" for k in kwargs if k in allowed]
         values = [kwargs[k] for k in kwargs if k in allowed]
         if not fields:
             return
-        values.append(item_id)
+        values.extend([name, grower_id])
         cur = self.conn.cursor()
         try:
-            cur.execute(f"UPDATE Items SET {', '.join(fields)} WHERE item_id=?", values)
+            cur.execute(
+                f"UPDATE Items SET {', '.join(fields)} WHERE name=? AND grower_id=?",
+                values,
+            )
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to update item: {exc}") from exc
 
-    def delete_item(self, item_id: int) -> None:
+    def delete_item(self, name: str, grower_id: int) -> None:
         cur = self.conn.cursor()
         try:
-            cur.execute("DELETE FROM Items WHERE item_id=?", (item_id,))
+            cur.execute("DELETE FROM Items WHERE name=? AND grower_id=?", (name, grower_id))
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to delete item: {exc}") from exc
 
-    def update_item_stock(self, item_id: int, change: float) -> None:
+    def update_item_stock(self, name: str, grower_id: int, change: float) -> None:
         """Increment item stock by ``change`` which may be negative."""
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "UPDATE Items SET stock_qty = stock_qty + ? WHERE item_id=?",
-                (change, item_id),
+                "UPDATE Items SET stock_qty = stock_qty + ? WHERE name=? AND grower_id=?",
+                (change, name, grower_id),
             )
             self.conn.commit()
         except sqlite3.Error as exc:
@@ -156,47 +164,67 @@ class DatabaseManager:
         except sqlite3.Error as exc:
             raise RuntimeError(f"Failed to fetch items: {exc}") from exc
 
-    # ---- Parties ----
-    def add_party(self, name: str, contact_info: str = "") -> int:
+    # ---- Customers ----
+    def add_customer(
+        self, name: str, contact_info: str = "", customer_type: str = "Buyer"
+    ) -> int:
+        """Add a new customer and return its ID."""
+        name = camel_case(name)
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO Parties (name, contact_info) VALUES (?, ?)",
-                (name, contact_info),
+                "INSERT INTO Customers (name, contact_info, customer_type) VALUES (?, ?, ?)",
+                (name, contact_info, customer_type),
             )
             self.conn.commit()
             lastrowid = cur.lastrowid
             if lastrowid is None:
-                raise RuntimeError("Failed to retrieve lastrowid after adding party.")
+                raise RuntimeError("Failed to retrieve lastrowid after adding customer.")
             return lastrowid
         except sqlite3.Error as exc:
             self.conn.rollback()
-            raise RuntimeError(f"Failed to add party: {exc}") from exc
+            raise RuntimeError(f"Failed to add customer: {exc}") from exc
 
-    def update_party_balance(self, party_id: int, amount: float) -> None:
+    def update_customer_balance(self, customer_id: int, amount: float) -> None:
         cur = self.conn.cursor()
         try:
-            cur.execute("UPDATE Parties SET balance = balance + ? WHERE party_id=?", (amount, party_id))
+            cur.execute(
+                "UPDATE Customers SET balance = balance + ? WHERE customer_id=?",
+                (amount, customer_id),
+            )
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
-            raise RuntimeError(f"Failed to update party balance: {exc}") from exc
+            raise RuntimeError(f"Failed to update customer balance: {exc}") from exc
 
-    def get_all_parties(self) -> List[Dict[str, Any]]:
+    def get_all_customers(self) -> List[Dict[str, Any]]:
+        """Return all customers."""
         cur = self.conn.cursor()
         try:
-            cur.execute("SELECT * FROM Parties")
+            cur.execute("SELECT * FROM Customers")
             rows = cur.fetchall()
             return [dict(row) for row in rows]
         except sqlite3.Error as exc:
-            raise RuntimeError(f"Failed to fetch parties: {exc}") from exc
+            raise RuntimeError(f"Failed to fetch customers: {exc}") from exc
+
+    def get_customers_by_type(self, customer_type: str) -> List[Dict[str, Any]]:
+        cur = self.conn.cursor()
+        try:
+            cur.execute(
+                "SELECT * FROM Customers WHERE customer_type=?",
+                (customer_type,),
+            )
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as exc:
+            raise RuntimeError(f"Failed to fetch customers: {exc}") from exc
 
     # ---- Invoices ----
     def create_invoice(
         self,
         date: str,
         inv_type: str,
-        party_id: Optional[int],
+        customer_id: Optional[int],
         items: Iterable[Dict[str, Any]],
         is_credit: bool = False,
     ) -> int:
@@ -205,26 +233,30 @@ class DatabaseManager:
             subtotal = sum(item["price"] * item["quantity"] for item in items)
             cur.execute(
                 """INSERT INTO Invoices
-                   (date, type, party_id, subtotal, total_amount, is_credit)
+                   (date, type, customer_id, subtotal, total_amount, is_credit)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (date, inv_type, party_id, subtotal, subtotal, int(is_credit)),
+                (date, inv_type, customer_id, subtotal, subtotal, int(is_credit)),
             )
             inv_id = cur.lastrowid
             if inv_id is None:
                 raise RuntimeError("Failed to retrieve lastrowid after creating invoice.")
             for item in items:
                 cur.execute(
-                    "INSERT INTO InvoiceItems (inv_id, item_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO InvoiceItems (inv_id, item_name, grower_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)",
                     (
                         inv_id,
-                        item["item_id"],
+                        item["name"],
+                        item["grower_id"],
                         item["quantity"],
                         item["price"],
                         item["price"] * item["quantity"],
                     ),
                 )
-            if is_credit and party_id:
-                cur.execute("UPDATE Parties SET balance = balance + ? WHERE party_id=?", (subtotal, party_id))
+            if is_credit and customer_id:
+                cur.execute(
+                    "UPDATE Customers SET balance = balance + ? WHERE customer_id=?",
+                    (subtotal, customer_id),
+                )
             self.conn.commit()
             return inv_id
         except sqlite3.Error as exc:
@@ -322,37 +354,40 @@ CREATE_TABLE_QUERIES = [
         role TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS Items(
-        item_id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        category TEXT,
+        grower_id INTEGER NOT NULL,
         price_excl_tax REAL NOT NULL,
-        stock_qty REAL NOT NULL DEFAULT 0
+        stock_qty REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY(name, grower_id),
+        FOREIGN KEY(grower_id) REFERENCES Customers(customer_id)
     )""",
-    """CREATE TABLE IF NOT EXISTS Parties(
-        party_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    """CREATE TABLE IF NOT EXISTS Customers(
+        customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         contact_info TEXT,
+        customer_type TEXT NOT NULL,
         balance REAL NOT NULL DEFAULT 0
     )""",
     """CREATE TABLE IF NOT EXISTS Invoices(
         inv_id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
         type TEXT NOT NULL,
-        party_id INTEGER,
+        customer_id INTEGER,
         subtotal REAL NOT NULL,
         total_amount REAL NOT NULL,
         is_credit INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY(party_id) REFERENCES Parties(party_id)
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )""",
     """CREATE TABLE IF NOT EXISTS InvoiceItems(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         inv_id INTEGER NOT NULL,
-        item_id INTEGER NOT NULL,
+        item_name TEXT NOT NULL,
+        grower_id INTEGER NOT NULL,
         quantity REAL NOT NULL,
         unit_price REAL NOT NULL,
         line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
-        FOREIGN KEY(item_id) REFERENCES Items(item_id)
+        FOREIGN KEY(item_name, grower_id) REFERENCES Items(name, grower_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,

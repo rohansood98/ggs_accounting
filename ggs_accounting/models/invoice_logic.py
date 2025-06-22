@@ -15,7 +15,7 @@ class InvoiceLogic:
     def create_invoice(
         self,
         inv_type: str,
-        party_id: Optional[int],
+        customer_id: Optional[int],
         items: List[Dict[str, Any]],
         *,
         date: Optional[str] = None,
@@ -27,12 +27,12 @@ class InvoiceLogic:
         inv_id = self._db.create_invoice(
             date_str,
             inv_type,
-            party_id,
+            customer_id,
             items,
             is_credit=is_credit,
         )
         for item in items:
             change = item["quantity"] if inv_type == "Purchase" else -item["quantity"]
-            self._db.update_item_stock(item["item_id"], change)
+            self._db.update_item_stock(item["name"], item["grower_id"], change)
         return inv_id
 

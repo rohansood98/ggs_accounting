@@ -14,39 +14,40 @@ CREATE_TABLE_QUERIES = [
         role TEXT NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS Items(
-        item_id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        category TEXT,
-        grower_id INTEGER,
+        grower_id INTEGER NOT NULL,
         price_excl_tax REAL NOT NULL,
         stock_qty REAL NOT NULL DEFAULT 0,
-        FOREIGN KEY(grower_id) REFERENCES Parties(party_id)
+        PRIMARY KEY(name, grower_id),
+        FOREIGN KEY(grower_id) REFERENCES Customers(customer_id)
     )""",
-    """CREATE TABLE IF NOT EXISTS Parties(
-        party_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    """CREATE TABLE IF NOT EXISTS Customers(
+        customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         contact_info TEXT,
+        customer_type TEXT NOT NULL,
         balance REAL NOT NULL DEFAULT 0
     )""",
     """CREATE TABLE IF NOT EXISTS Invoices(
         inv_id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
         type TEXT NOT NULL,
-        party_id INTEGER,
+        customer_id INTEGER,
         subtotal REAL NOT NULL,
         total_amount REAL NOT NULL,
         is_credit INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY(party_id) REFERENCES Parties(party_id)
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )""",
     """CREATE TABLE IF NOT EXISTS InvoiceItems(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         inv_id INTEGER NOT NULL,
-        item_id INTEGER NOT NULL,
+        item_name TEXT NOT NULL,
+        grower_id INTEGER NOT NULL,
         quantity REAL NOT NULL,
         unit_price REAL NOT NULL,
         line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
-        FOREIGN KEY(item_id) REFERENCES Items(item_id)
+        FOREIGN KEY(item_name, grower_id) REFERENCES Items(name, grower_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,

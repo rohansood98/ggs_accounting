@@ -16,7 +16,6 @@ class ItemDialog(QtWidgets.QDialog):
         self.setWindowTitle("Edit Item" if item else "Add Item")
 
         self.name_edit = QtWidgets.QLineEdit()
-        self.category_edit = QtWidgets.QLineEdit()
         self.price_edit = QtWidgets.QDoubleSpinBox()
         self.price_edit.setMaximum(1e9)
         self.price_edit.setPrefix("₹")
@@ -26,7 +25,6 @@ class ItemDialog(QtWidgets.QDialog):
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_edit)
-        form.addRow("Category", self.category_edit)
         form.addRow("Price", self.price_edit)
         form.addRow("Stock", self.stock_edit)
         form.addRow("Grower", self.grower_combo)
@@ -46,7 +44,6 @@ class ItemDialog(QtWidgets.QDialog):
 
         if item:
             self.name_edit.setText(item.get("name", ""))
-            self.category_edit.setText(item.get("category", ""))
             self.price_edit.setValue(float(item.get("price_excl_tax", 0)))
             self.stock_edit.setValue(float(item.get("stock_qty", 0)))
             idx = self.grower_combo.findData(item.get("grower_id"))
@@ -55,10 +52,10 @@ class ItemDialog(QtWidgets.QDialog):
 
     def _populate_grower_combo(self) -> None:
         """Populate the grower (party) combo box."""
-        self._growers = self._db.get_all_parties()
+        self._growers = self._db.get_customers_by_type("Grower")
         self.grower_combo.addItem("", None)
         for p in self._growers:
-            self.grower_combo.addItem(p["name"], p["party_id"])
+            self.grower_combo.addItem(p["name"], p["customer_id"])
 
     def get_data(self) -> Optional[Dict[str, Any]]:
         name = self.name_edit.text().strip()
@@ -71,7 +68,6 @@ class ItemDialog(QtWidgets.QDialog):
             return None
         data = {
             "name": name,
-            "category": self.category_edit.text().strip(),
             "price_excl_tax": price,
             "stock_qty": self.stock_edit.value(),
             "grower_id": self.grower_combo.currentData(),
@@ -84,7 +80,7 @@ class ItemDialog(QtWidgets.QDialog):
             return
         try:
             if self._item:
-                self._db.update_item(self._item["item_id"], **data)
+                self._db.update_item(self._item["name"], self._item["grower_id"], **data)
             else:
                 self._db.add_item(**data)
         except Exception as exc:  # pragma: no cover - unexpected errors
@@ -123,8 +119,8 @@ class InventoryPanel(QtWidgets.QWidget):
             controls.addWidget(btn)
         layout.addLayout(controls)
 
-        self.table = QtWidgets.QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Name", "Category", "Grower", "Price", "Stock"])
+        self.table = QtWidgets.QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Name", "Grower", "Price", "Stock"])
         header = self.table.horizontalHeader()
         if header is not None:
             header.setStretchLastSection(True)
@@ -147,25 +143,21 @@ class InventoryPanel(QtWidgets.QWidget):
 
     def _apply_filter(self) -> None:
         query = self.search_edit.text().strip().lower()
-        filtered = [
-            item for item in self._items
-            if query in item["name"].lower() or query in str(item.get("category", "")).lower()
-        ]
+        filtered = [item for item in self._items if query in item["name"].lower()]
         self._populate_table(filtered)
 
     def _populate_table(self, items: List[Dict[str, Any]]) -> None:
         self.table.setRowCount(len(items))
         for row, item in enumerate(items):
             self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(str(item.get("name", ""))))
-            self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(item.get("category", ""))))
             grower_name = ""
             if item.get("grower_id"):
-                grower = next((g for g in self._growers if g["party_id"] == item["grower_id"]), None)
+                grower = next((g for g in self._growers if g["customer_id"] == item["grower_id"]), None)
                 if grower:
                     grower_name = grower["name"]
-            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(grower_name))
-            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"₹{item.get('price_excl_tax', 0):.2f}"))
-            self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(str(item.get("stock_qty", 0))))
+            self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(grower_name))
+            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(f"₹{item.get('price_excl_tax', 0):.2f}"))
+            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(item.get("stock_qty", 0))))
             self.table.setRowHeight(row, 20)
         self.table.resizeColumnsToContents()
 
@@ -175,10 +167,7 @@ class InventoryPanel(QtWidgets.QWidget):
             return None
         # map table row to item via filter
         query = self.search_edit.text().strip().lower()
-        filtered = [
-            item for item in self._items
-            if query in item["name"].lower() or query in str(item.get("category", "")).lower()
-        ]
+        filtered = [item for item in self._items if query in item["name"].lower()]
         if row >= len(filtered):
             return None
         return filtered[row]
@@ -209,7 +198,7 @@ class InventoryPanel(QtWidgets.QWidget):
         )
         if ans == QtWidgets.QMessageBox.StandardButton.Yes:
             try:
-                self._db.delete_item(item["item_id"])
+                self._db.delete_item(item["name"], item["grower_id"])
             except Exception as exc:  # pragma: no cover - unexpected errors
                 QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             self._load_items()
