@@ -13,7 +13,7 @@ class MainWindow(QtWidgets.QMainWindow):
     exit_requested = pyqtSignal()  # Add a new signal for exit
 
 
-    def __init__(self, db: DatabaseManager, user_role: str) -> None:
+    def __init__(self, user_role: str, db: DatabaseManager) -> None:
         super().__init__()
         self._db = db
         self._role = UserRole(user_role)
@@ -28,6 +28,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._db = db  # Store db for use in panels
         self._init_tabs()
         self._init_menu()
+        self._stack.currentChanged.connect(self._on_tab_changed)
+
+    def _on_tab_changed(self, idx: int) -> None:
+        widget = self._stack.widget(idx)
+        from ggs_accounting.ui.reports_inventory import InventoryValuationPanel
+        if isinstance(widget, InventoryValuationPanel):
+            widget._load_data()
 
     def _init_menu(self) -> None:
         menubar = self.menuBar()

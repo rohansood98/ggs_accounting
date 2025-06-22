@@ -53,8 +53,10 @@ class ReceiptConsole(QtWidgets.QWidget):
         layout.addLayout(btns)
 
         self.summary_table = QtWidgets.QTableWidget(0, 4)
-        self.summary_table.setHorizontalHeaderLabels(["Date", "Invoice", "Party", "Total"])
-        self.summary_table.horizontalHeader().setStretchLastSection(True)
+        self.summary_table.setHorizontalHeaderLabels(["Date", "Invoice", "Party", "Total (₹)"])
+        header = self.summary_table.horizontalHeader()
+        if header is not None:
+            header.setStretchLastSection(True)
         layout.addWidget(self.summary_table)
 
     def _load_parties(self) -> None:
@@ -85,7 +87,7 @@ class ReceiptConsole(QtWidgets.QWidget):
             self.summary_table.setItem(row, 0, QtWidgets.QTableWidgetItem(inv["date"]))
             self.summary_table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(inv["inv_id"])))
             self.summary_table.setItem(row, 2, QtWidgets.QTableWidgetItem(parties.get(inv["party_id"], "")))
-            self.summary_table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"{inv['total_amount']:.2f}"))
+            self.summary_table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"₹{inv['total_amount']:.2f}"))
         self.summary_table.resizeColumnsToContents()
 
     def _print(self) -> None:

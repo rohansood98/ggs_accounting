@@ -94,12 +94,12 @@ class DatabaseManager:
         return None
 
     # ---- Items ----
-    def add_item(self, name: str, category: str, price_excl_tax: float, stock_qty: float) -> int:
+    def add_item(self, name: str, category: str, price_excl_tax: float, stock_qty: float, grower_id: Optional[int] = None) -> int:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO Items (name, category, price_excl_tax, stock_qty) VALUES (?, ?, ?, ?)",
-                (name, category, price_excl_tax, stock_qty),
+                "INSERT INTO Items (name, category, price_excl_tax, stock_qty, grower_id) VALUES (?, ?, ?, ?, ?)",
+                (name, category, price_excl_tax, stock_qty, grower_id),
             )
             self.conn.commit()
             lastrowid = cur.lastrowid
@@ -110,15 +110,16 @@ class DatabaseManager:
             self.conn.rollback()
             raise RuntimeError(f"Failed to add item: {exc}") from exc
 
-    def update_item(self, item_id: int, **fields: Any) -> None:
+    def update_item(self, item_id: int, **kwargs) -> None:
+        allowed = {"name", "category", "price_excl_tax", "stock_qty", "grower_id"}
+        fields = [f"{k}=?" for k in kwargs if k in allowed]
+        values = [kwargs[k] for k in kwargs if k in allowed]
         if not fields:
             return
-        columns = ", ".join(f"{k}=?" for k in fields)
-        values = list(fields.values()) + [item_id]
-        sql = f"UPDATE Items SET {columns} WHERE item_id=?"
+        values.append(item_id)
         cur = self.conn.cursor()
         try:
-            cur.execute(sql, values)
+            cur.execute(f"UPDATE Items SET {', '.join(fields)} WHERE item_id=?", values)
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PyQt6 import QtWidgets
+from PyQt6.QtCore import Qt
 from datetime import date
 from typing import List, Dict, Any, cast
 
@@ -32,25 +33,23 @@ class InvoicePanel(QtWidgets.QWidget):
         self.party_combo = QtWidgets.QComboBox()
         add_party_btn = QtWidgets.QPushButton("Add Party")
         add_party_btn.clicked.connect(self._add_party)
-
-        party_layout = QtWidgets.QHBoxLayout()
-        party_layout.addWidget(self.party_combo)
-        party_layout.addWidget(add_party_btn)
-
+        party_row.addWidget(self.party_combo)
+        party_row.addWidget(add_party_btn)
 
         self.date_edit = QtWidgets.QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(date.today())
 
         form.addRow("Type", self.type_combo)
-        form.addRow("Party", party_layout)
         form.addRow("Party", party_row)
         form.addRow("Date", self.date_edit)
         layout.addLayout(form)
 
-        self.table = QtWidgets.QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Item", "Qty", "Price", "Total"])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table = QtWidgets.QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Item", "Qty", "Price (₹)", "Total (₹)", "Delete"])
+        header = self.table.horizontalHeader()
+        if header is not None:
+            header.setStretchLastSection(True)
         layout.addWidget(self.table)
 
         buttons = QtWidgets.QHBoxLayout()
@@ -89,7 +88,7 @@ class InvoicePanel(QtWidgets.QWidget):
             self._items = []
 
     def _add_party(self) -> None:
-        from .party_dialog import PartyDialog
+        from ggs_accounting.ui.party_dialog import PartyDialog
 
         dlg = PartyDialog(self._db)
         if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
@@ -103,26 +102,33 @@ class InvoicePanel(QtWidgets.QWidget):
     def _add_line(self) -> None:
         row = self.table.rowCount()
         self.table.insertRow(row)
-        item_combo = QtWidgets.QComboBox()
-        for it in self._items:
-            item_combo.addItem(it["name"], it["item_id"])
+        item_edit = QtWidgets.QLineEdit()
+        completer = QtWidgets.QCompleter([it["name"] for it in self._items])
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        item_edit.setCompleter(completer)
         qty_spin = QtWidgets.QDoubleSpinBox()
         qty_spin.setMaximum(1e6)
         qty_spin.setValue(1)
         price_spin = QtWidgets.QDoubleSpinBox()
         price_spin.setMaximum(1e9)
+        price_spin.setPrefix("₹")
         if self._items:
             price_spin.setValue(float(self._items[0].get("price_excl_tax", 0)))
-        total_item = QtWidgets.QTableWidgetItem("0.00")
-
+        total_item = QtWidgets.QTableWidgetItem("₹0.00")
+        del_btn = QtWidgets.QPushButton("Delete")
+        del_btn.clicked.connect(lambda _, r=row: self._delete_row(r))
         qty_spin.valueChanged.connect(self._recalc_totals)
         price_spin.valueChanged.connect(self._recalc_totals)
-        item_combo.currentIndexChanged.connect(self._recalc_totals)
-
-        self.table.setCellWidget(row, 0, item_combo)
+        item_edit.textChanged.connect(self._recalc_totals)
+        self.table.setCellWidget(row, 0, item_edit)
         self.table.setCellWidget(row, 1, qty_spin)
         self.table.setCellWidget(row, 2, price_spin)
         self.table.setItem(row, 3, total_item)
+        self.table.setCellWidget(row, 4, del_btn)
+        self._recalc_totals()
+
+    def _delete_row(self, row: int) -> None:
+        self.table.removeRow(row)
         self._recalc_totals()
 
     def _gather_items(self) -> List[Dict[str, Any]]:
@@ -131,11 +137,25 @@ class InvoicePanel(QtWidgets.QWidget):
             item_widget = self.table.cellWidget(row, 0)
             qty_widget = self.table.cellWidget(row, 1)
             price_widget = self.table.cellWidget(row, 2)
-            if not isinstance(item_widget, QtWidgets.QComboBox):
+            if not isinstance(item_widget, QtWidgets.QLineEdit):
                 continue
-            item_id = item_widget.currentData()
-            if item_id is None:
-                continue
+            item_name = cast(QtWidgets.QLineEdit, item_widget).text().strip()
+            if not item_name:
+                QtWidgets.QMessageBox.warning(self, "Validation", f"Item name required in row {row+1}")
+                return []
+            # Try to find item_id
+            item = next((it for it in self._items if it["name"] == item_name), None)
+            if item is None:
+                # Add new item to DB with default values
+                try:
+                    item_id = self._db.add_item(item_name, category="", price_excl_tax=cast(QtWidgets.QDoubleSpinBox, price_widget).value(), stock_qty=0.0, grower_id=None)
+                    # Reload items for future lookups
+                    self._load_items()
+                except Exception as exc:
+                    QtWidgets.QMessageBox.critical(self, "Error", f"Failed to add new item '{item_name}': {exc}")
+                    return []
+            else:
+                item_id = item["item_id"]
             quantity = float(cast(QtWidgets.QDoubleSpinBox, qty_widget).value())
             price = float(cast(QtWidgets.QDoubleSpinBox, price_widget).value())
             items.append({"item_id": item_id, "quantity": quantity, "price": price})
@@ -150,9 +170,9 @@ class InvoicePanel(QtWidgets.QWidget):
             price = cast(QtWidgets.QDoubleSpinBox, price_widget).value()
             total = qty * price
             subtotal += total
-            item = QtWidgets.QTableWidgetItem(f"{total:.2f}")
+            item = QtWidgets.QTableWidgetItem(f"₹{total:.2f}")
             self.table.setItem(row, 3, item)
-        self.subtotal_label.setText(f"Subtotal: {subtotal:.2f}")
+        self.subtotal_label.setText(f"Subtotal: ₹{subtotal:.2f}")
 
     # ---- Save ----
     def _save_invoice(self) -> None:
@@ -170,20 +190,4 @@ class InvoicePanel(QtWidgets.QWidget):
         self.table.setRowCount(0)
         self._recalc_totals()
         QtWidgets.QMessageBox.information(self, "Saved", "Invoice saved")
-
-    def _add_party(self):
-        from ggs_accounting.ui.party_dialog import PartyDialog
-        dlg = PartyDialog(self)
-        if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
-            name, contact = dlg.get_data()
-            if name:
-                try:
-                    self._db.add_party(name, contact)
-                    self._load_parties()
-                    # Select the newly added party
-                    idx = self.party_combo.findText(name)
-                    if idx >= 0:
-                        self.party_combo.setCurrentIndex(idx)
-                except Exception as exc:
-                    QtWidgets.QMessageBox.critical(self, "Error", str(exc))
 

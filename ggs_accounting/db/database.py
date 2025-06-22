@@ -17,8 +17,10 @@ CREATE_TABLE_QUERIES = [
         item_id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         category TEXT,
+        grower_id INTEGER,
         price_excl_tax REAL NOT NULL,
-        stock_qty REAL NOT NULL DEFAULT 0
+        stock_qty REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY(grower_id) REFERENCES Parties(party_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Parties(
         party_id INTEGER PRIMARY KEY AUTOINCREMENT,

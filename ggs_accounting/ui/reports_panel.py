@@ -31,6 +31,7 @@ class ReportsPanel(QtWidgets.QWidget):
         self.saved_combo.currentIndexChanged.connect(self._load_saved_query)
 
         self.name_edit = QtWidgets.QLineEdit()
+        self.name_edit.setPlaceholderText("Enter custom SQL name to be saved")
         run_btn = QtWidgets.QPushButton("Run")
         save_btn = QtWidgets.QPushButton("Save")
         run_btn.clicked.connect(self._run_query)

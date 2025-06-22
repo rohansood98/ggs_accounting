@@ -28,9 +28,11 @@ class InventoryValuationPanel(QtWidgets.QWidget):
         layout.addLayout(btns)
 
         self.table = QtWidgets.QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Item", "Stock", "Price", "Value"])
+        self.table.setHorizontalHeaderLabels(["Item", "Stock", "Price (₹)", "Value (₹)"])
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        header = self.table.horizontalHeader()
+        if header is not None:
+            header.setStretchLastSection(True)
         layout.addWidget(self.table)
 
         self.total_label = QtWidgets.QLabel()
@@ -46,10 +48,10 @@ class InventoryValuationPanel(QtWidgets.QWidget):
         for row, item in enumerate(data):
             self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(item["name"]))
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(item["stock"])))
-            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(f"{item['price']:.2f}"))
-            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"{item['value']:.2f}"))
+            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(f"₹{item['price']:.2f}"))
+            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"₹{item['value']:.2f}"))
         self.table.resizeColumnsToContents()
-        self.total_label.setText(f"Total Stock Value: {total:.2f}")
+        self.total_label.setText(f"Total Stock Value: ₹{total:.2f}")
         self._data = data
 
     def _export(self) -> None:

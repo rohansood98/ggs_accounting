@@ -19,15 +19,17 @@ class ItemDialog(QtWidgets.QDialog):
         self.category_edit = QtWidgets.QLineEdit()
         self.price_edit = QtWidgets.QDoubleSpinBox()
         self.price_edit.setMaximum(1e9)
-        self.price_edit.setPrefix("$")
+        self.price_edit.setPrefix("₹")
         self.stock_edit = QtWidgets.QDoubleSpinBox()
         self.stock_edit.setMaximum(1e9)
+        self.grower_combo = QtWidgets.QComboBox()
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_edit)
         form.addRow("Category", self.category_edit)
         form.addRow("Price", self.price_edit)
         form.addRow("Stock", self.stock_edit)
+        form.addRow("Grower", self.grower_combo)
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok
@@ -40,11 +42,23 @@ class ItemDialog(QtWidgets.QDialog):
         layout.addLayout(form)
         layout.addWidget(buttons)
 
+        self._populate_grower_combo()
+
         if item:
             self.name_edit.setText(item.get("name", ""))
             self.category_edit.setText(item.get("category", ""))
             self.price_edit.setValue(float(item.get("price_excl_tax", 0)))
             self.stock_edit.setValue(float(item.get("stock_qty", 0)))
+            idx = self.grower_combo.findData(item.get("grower_id"))
+            if idx >= 0:
+                self.grower_combo.setCurrentIndex(idx)
+
+    def _populate_grower_combo(self) -> None:
+        """Populate the grower (party) combo box."""
+        self._growers = self._db.get_all_parties()
+        self.grower_combo.addItem("", None)
+        for p in self._growers:
+            self.grower_combo.addItem(p["name"], p["party_id"])
 
     def get_data(self) -> Optional[Dict[str, Any]]:
         name = self.name_edit.text().strip()
@@ -60,6 +74,7 @@ class ItemDialog(QtWidgets.QDialog):
             "category": self.category_edit.text().strip(),
             "price_excl_tax": price,
             "stock_qty": self.stock_edit.value(),
+            "grower_id": self.grower_combo.currentData(),
         }
         return data
 
@@ -108,9 +123,11 @@ class InventoryPanel(QtWidgets.QWidget):
             controls.addWidget(btn)
         layout.addLayout(controls)
 
-        self.table = QtWidgets.QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Name", "Category", "Price", "Stock"])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table = QtWidgets.QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Name", "Category", "Grower", "Price", "Stock"])
+        header = self.table.horizontalHeader()
+        if header is not None:
+            header.setStretchLastSection(True)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.table)
 
@@ -141,8 +158,14 @@ class InventoryPanel(QtWidgets.QWidget):
         for row, item in enumerate(items):
             self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(str(item.get("name", ""))))
             self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(item.get("category", ""))))
-            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(f"{item.get('price_excl_tax', 0):.2f}"))
-            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(item.get("stock_qty", 0))))
+            grower_name = ""
+            if item.get("grower_id"):
+                grower = next((g for g in self._growers if g["party_id"] == item["grower_id"]), None)
+                if grower:
+                    grower_name = grower["name"]
+            self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(grower_name))
+            self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(f"₹{item.get('price_excl_tax', 0):.2f}"))
+            self.table.setItem(row, 4, QtWidgets.QTableWidgetItem(str(item.get("stock_qty", 0))))
             self.table.setRowHeight(row, 20)
         self.table.resizeColumnsToContents()
 
