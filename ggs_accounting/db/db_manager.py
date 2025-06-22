@@ -125,7 +125,7 @@ class DatabaseManager:
             self.conn.rollback()
             raise RuntimeError(f"Failed to add item: {exc}") from exc
 
-    def update_item(self, item_id: int, customer_id: int, **kwargs) -> None:
+    def update_item(self, item_id: int, customer_id: int, price_excl_tax: float, **kwargs) -> None:
         """Update item or inventory fields."""
         item_fields = {}
         inv_fields = {}
@@ -147,8 +147,8 @@ class DatabaseManager:
             if inv_fields:
                 sets = ", ".join(f"{k}=?" for k in inv_fields)
                 cur.execute(
-                    f"UPDATE Inventory SET {sets} WHERE item_id=? AND customer_id=?",
-                    [*inv_fields.values(), item_id, customer_id],
+                    f"UPDATE Inventory SET {sets} WHERE item_id=? AND customer_id=? AND price_excl_tax=?",
+                    [*inv_fields.values(), item_id, customer_id, price_excl_tax],
                 )
             self.conn.commit()
         except sqlite3.Error as exc:
@@ -156,29 +156,37 @@ class DatabaseManager:
             raise RuntimeError(f"Failed to update item: {exc}") from exc
 
     def delete_item(self, item_id: int, customer_id: int) -> None:
+        """Delete an inventory item if not referenced in InvoiceItems."""
         cur = self.conn.cursor()
+        # Check for references in InvoiceItems
+        ref_count = cur.execute(
+            "SELECT COUNT(*) FROM InvoiceItems WHERE item_id=? AND customer_id=?",
+            (item_id, customer_id),
+        ).fetchone()[0]
+        if ref_count > 0:
+            raise RuntimeError(
+                "Cannot delete item: It is referenced in one or more invoices."
+            )
         try:
             cur.execute(
                 "DELETE FROM Inventory WHERE item_id=? AND customer_id=?",
                 (item_id, customer_id),
             )
             cur.execute(
-                "SELECT COUNT(*) FROM Inventory WHERE item_id=?",
+                "DELETE FROM Items WHERE item_id=?",
                 (item_id,),
             )
-            if cur.fetchone()[0] == 0:
-                cur.execute("DELETE FROM Items WHERE item_id=?", (item_id,))
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to delete item: {exc}") from exc
 
-    def update_item_stock(self, item_id: int, customer_id: int, change: float) -> None:
+    def update_item_stock(self, item_id: int, customer_id: int, price_excl_tax: float, change: float) -> None:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "UPDATE Inventory SET stock_qty = stock_qty + ? WHERE item_id=? AND customer_id=?",
-                (change, item_id, customer_id),
+                "UPDATE Inventory SET stock_qty = stock_qty + ? WHERE item_id=? AND customer_id=? AND price_excl_tax=?",
+                (change, item_id, customer_id, price_excl_tax),
             )
             self.conn.commit()
         except sqlite3.Error as exc:
@@ -297,11 +305,20 @@ class DatabaseManager:
                         item["price"] * item["quantity"],
                     ),
                 )
+            # Update customer balance for credit transactions
             if is_credit and customer_id:
-                cur.execute(
-                    "UPDATE Customers SET balance = balance + ? WHERE customer_id=?",
-                    (subtotal - amount_paid, customer_id),
-                )
+                if inv_type == "Sale":
+                    # Buyer owes you: increase their balance
+                    cur.execute(
+                        "UPDATE Customers SET balance = balance + ? WHERE customer_id=?",
+                        (subtotal - amount_paid, customer_id),
+                    )
+                elif inv_type == "Purchase":
+                    # You owe grower: decrease their balance
+                    cur.execute(
+                        "UPDATE Customers SET balance = balance - ? WHERE customer_id=?",
+                        (subtotal - amount_paid, customer_id),
+                    )
             self.conn.commit()
             return inv_id
         except sqlite3.Error as exc:
@@ -454,7 +471,7 @@ CREATE_TABLE_QUERIES = [
         stock_qty REAL NOT NULL DEFAULT 0,
         FOREIGN KEY(customer_id) REFERENCES Customers(customer_id),
         FOREIGN KEY(item_id) REFERENCES Items(item_id),
-        UNIQUE(customer_id, item_id)
+        UNIQUE(customer_id, item_id, price_excl_tax)
     )""",
     """CREATE TABLE IF NOT EXISTS Customers(
         customer_id INTEGER PRIMARY KEY AUTOINCREMENT,

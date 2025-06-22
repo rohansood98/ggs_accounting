@@ -92,7 +92,7 @@ class ItemDialog(QtWidgets.QDialog):
             return
         try:
             if self._item:
-                self._db.update_item(self._item["item_id"], self._item["customer_id"], **data)
+                self._db.update_item(self._item["item_id"], self._item["customer_id"], self._item["price_excl_tax"], **data)
             else:
                 self._db.add_item(**data)
         except Exception as exc:  # pragma: no cover - unexpected errors
@@ -186,7 +186,7 @@ class InventoryPanel(QtWidgets.QWidget):
 
     def _get_selected_item(self) -> Optional[Dict[str, Any]]:
         row = self.table.currentRow()
-        if row < 0 or row >= len(self._items):
+        if row < 0 or row >= self.table.rowCount():
             return None
         # map table row to item via filter
         query = self.search_edit.text().strip().lower()
@@ -216,13 +216,19 @@ class InventoryPanel(QtWidgets.QWidget):
         ans = QtWidgets.QMessageBox.question(
             self,
             "Confirm",
-            f"Delete {item['name']}?",
+            f"Delete {item['name']} (₹{item['price_excl_tax']:.2f})?",
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
         )
         if ans == QtWidgets.QMessageBox.StandardButton.Yes:
             try:
-                self._db.delete_item(item["item_id"], item["customer_id"])
+                self._db.delete_item(item["item_id"], item["customer_id"], item["price_excl_tax"])
             except Exception as exc:  # pragma: no cover - unexpected errors
                 QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             self._load_items()
+
+    def showEvent(self, a0):
+        """Refresh data when the panel becomes visible."""
+        self._load_customers()
+        self._load_items()
+        super().showEvent(a0)
 

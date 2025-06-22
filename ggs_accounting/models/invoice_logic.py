@@ -42,7 +42,18 @@ class InvoiceLogic:
                     item_id = int(row["item_id"])
             if item_id is None:
                 continue
+            price_excl_tax = item.get("price_excl_tax")
+            if price_excl_tax is None:
+                # Fallback: fetch from Inventory
+                row = self._db.conn.execute(
+                    "SELECT price_excl_tax FROM Inventory WHERE item_id=? AND customer_id=? ORDER BY inventory_id DESC LIMIT 1",
+                    (item_id, item["customer_id"]),
+                ).fetchone()
+                if row:
+                    price_excl_tax = row["price_excl_tax"]
+                else:
+                    raise KeyError("price_excl_tax")
             change = item["quantity"] if inv_type == "Purchase" else -item["quantity"]
-            self._db.update_item_stock(item_id, item["customer_id"], change)
+            self._db.update_item_stock(item_id, item["customer_id"], price_excl_tax, change)
         return inv_id
 

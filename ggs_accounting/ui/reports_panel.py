@@ -101,3 +101,8 @@ class ReportsPanel(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             return
         self._load_saved()
+
+    def showEvent(self, a0):
+        """Refresh saved queries when the panel becomes visible."""
+        self._load_saved()
+        super().showEvent(a0)

@@ -53,7 +53,7 @@ def get_inventory_values(
     item_id: Optional[int] = None,
     customer_id: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], float]:
-    """Return inventory valuations filtered by item or customer."""
+    """Return inventory valuations filtered by item or customer, using last purchase price."""
     cur = db.conn.cursor()
     cur.execute(
         """
@@ -74,42 +74,28 @@ def get_inventory_values(
     data: List[Dict[str, Any]] = []
     total_value = 0.0
 
-    if item_id is None and rows:
-        # Item filter "All" -> group by customer
-        grouped: Dict[int, Dict[str, Any]] = {}
-        for r in rows:
-            g = grouped.setdefault(
-                r["customer_id"],
-                {"name": r["customer_name"], "stock": 0.0, "value": 0.0, "price_sum": 0.0, "count": 0},
-            )
-            g["stock"] += r["stock_qty"]
-            g["value"] += r["stock_qty"] * r["price_excl_tax"]
-            g["price_sum"] += r["price_excl_tax"]
-            g["count"] += 1
-        for g in grouped.values():
-            price = g["price_sum"] / g["count"] if g["count"] else 0.0
-            data.append({"name": g["name"], "stock": g["stock"], "price": price, "value": g["value"]})
-            total_value += g["value"]
-    elif customer_id is None and rows:
-        grouped: Dict[int, Dict[str, Any]] = {}
-        for r in rows:
-            g = grouped.setdefault(
-                r["item_id"],
-                {"name": r["item_name"], "stock": 0.0, "value": 0.0, "price_sum": 0.0, "count": 0},
-            )
-            g["stock"] += r["stock_qty"]
-            g["value"] += r["stock_qty"] * r["price_excl_tax"]
-            g["price_sum"] += r["price_excl_tax"]
-            g["count"] += 1
-        for g in grouped.values():
-            price = g["price_sum"] / g["count"] if g["count"] else 0.0
-            data.append({"name": g["name"], "stock": g["stock"], "price": price, "value": g["value"]})
-            total_value += g["value"]
-    else:
-        for r in rows:
-            value = r["stock_qty"] * r["price_excl_tax"]
-            total_value += value
-            name = f"{r['item_name']} ({r['customer_name']})"
-            data.append({"name": name, "stock": r["stock_qty"], "price": r["price_excl_tax"], "value": value})
-
+    for r in rows:
+        # Use last purchase price from InvoiceItems if available
+        cur.execute(
+            """
+            SELECT unit_price FROM InvoiceItems
+            JOIN Invoices ON Invoices.inv_id = InvoiceItems.inv_id
+            WHERE InvoiceItems.item_id=? AND InvoiceItems.customer_id=? AND Invoices.type='Purchase'
+            ORDER BY Invoices.date DESC, InvoiceItems.id DESC LIMIT 1
+            """,
+            (r["item_id"], r["customer_id"]),
+        )
+        price_row = cur.fetchone()
+        price = price_row[0] if price_row else r["price_excl_tax"]
+        value = r["stock_qty"] * price
+        data.append({
+            "item_id": r["item_id"],
+            "name": r["item_name"],
+            "customer_id": r["customer_id"],
+            "customer_name": r["customer_name"],
+            "stock": r["stock_qty"],  # Use 'stock' key for UI compatibility
+            "price": price,
+            "value": value,
+        })
+        total_value += value
     return data, total_value

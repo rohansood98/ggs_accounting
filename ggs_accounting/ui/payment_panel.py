@@ -84,3 +84,9 @@ class PaymentPanel(QtWidgets.QWidget):
             return
         self.amount_spin.setValue(0.0)
         self._load_payments()
+
+    def showEvent(self, a0):
+        """Refresh data when the panel becomes visible."""
+        self._load_customers()
+        self._load_payments()
+        super().showEvent(a0)

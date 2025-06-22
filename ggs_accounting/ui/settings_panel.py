@@ -38,3 +38,8 @@ class SettingsPanel(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             return
         QtWidgets.QMessageBox.information(self, "Saved", "Settings updated")
+
+    def showEvent(self, a0):
+        """Refresh settings when the panel becomes visible."""
+        self._load_settings()
+        super().showEvent(a0)
