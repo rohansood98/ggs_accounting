@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 from ggs_accounting.db.db_manager import DatabaseManager
 
@@ -48,26 +48,68 @@ def get_customer_balances(db: DatabaseManager) -> List[Dict[str, Any]]:
     return result
 
 
-def get_inventory_values(db: DatabaseManager) -> Tuple[List[Dict[str, Any]], float]:
+def get_inventory_values(
+    db: DatabaseManager,
+    item_id: Optional[int] = None,
+    customer_id: Optional[int] = None,
+) -> Tuple[List[Dict[str, Any]], float]:
+    """Return inventory valuations filtered by item or customer."""
     cur = db.conn.cursor()
     cur.execute(
         """
-        SELECT Items.name, Inventory.stock_qty, Inventory.price_excl_tax
-        FROM Inventory JOIN Items ON Inventory.item_id = Items.item_id
+        SELECT Inventory.stock_qty, Inventory.price_excl_tax,
+               Items.item_id, Items.name AS item_name,
+               Customers.customer_id, Customers.name AS customer_name
+        FROM Inventory
+        JOIN Items ON Inventory.item_id = Items.item_id
+        JOIN Customers ON Inventory.customer_id = Customers.customer_id
         """
     )
-    rows = cur.fetchall()
+    rows = [dict(r) for r in cur.fetchall()]
+    if item_id is not None:
+        rows = [r for r in rows if r["item_id"] == item_id]
+    if customer_id is not None:
+        rows = [r for r in rows if r["customer_id"] == customer_id]
+
+    data: List[Dict[str, Any]] = []
     total_value = 0.0
-    result: List[Dict[str, Any]] = []
-    for row in rows:
-        value = float(row["stock_qty"] * row["price_excl_tax"])
-        total_value += value
-        result.append(
-            {
-                "name": row["name"],
-                "stock": row["stock_qty"],
-                "price": row["price_excl_tax"],
-                "value": value,
-            }
-        )
-    return result, total_value
+
+    if item_id is None and rows:
+        # Item filter "All" -> group by customer
+        grouped: Dict[int, Dict[str, Any]] = {}
+        for r in rows:
+            g = grouped.setdefault(
+                r["customer_id"],
+                {"name": r["customer_name"], "stock": 0.0, "value": 0.0, "price_sum": 0.0, "count": 0},
+            )
+            g["stock"] += r["stock_qty"]
+            g["value"] += r["stock_qty"] * r["price_excl_tax"]
+            g["price_sum"] += r["price_excl_tax"]
+            g["count"] += 1
+        for g in grouped.values():
+            price = g["price_sum"] / g["count"] if g["count"] else 0.0
+            data.append({"name": g["name"], "stock": g["stock"], "price": price, "value": g["value"]})
+            total_value += g["value"]
+    elif customer_id is None and rows:
+        grouped: Dict[int, Dict[str, Any]] = {}
+        for r in rows:
+            g = grouped.setdefault(
+                r["item_id"],
+                {"name": r["item_name"], "stock": 0.0, "value": 0.0, "price_sum": 0.0, "count": 0},
+            )
+            g["stock"] += r["stock_qty"]
+            g["value"] += r["stock_qty"] * r["price_excl_tax"]
+            g["price_sum"] += r["price_excl_tax"]
+            g["count"] += 1
+        for g in grouped.values():
+            price = g["price_sum"] / g["count"] if g["count"] else 0.0
+            data.append({"name": g["name"], "stock": g["stock"], "price": price, "value": g["value"]})
+            total_value += g["value"]
+    else:
+        for r in rows:
+            value = r["stock_qty"] * r["price_excl_tax"]
+            total_value += value
+            name = f"{r['item_name']} ({r['customer_name']})"
+            data.append({"name": name, "stock": r["stock_qty"], "price": r["price_excl_tax"], "value": value})
+
+    return data, total_value
