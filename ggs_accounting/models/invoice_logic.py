@@ -20,6 +20,7 @@ class InvoiceLogic:
         *,
         date: Optional[str] = None,
         is_credit: bool = False,
+        amount_paid: float = 0.0,
     ) -> int:
         if not items:
             raise ValueError("Invoice requires at least one item")
@@ -30,9 +31,18 @@ class InvoiceLogic:
             customer_id,
             items,
             is_credit=is_credit,
+            amount_paid=amount_paid,
         )
         for item in items:
+            item_id = item.get("item_id")
+            if item_id is None:
+                # Fallback to lookup by name
+                row = self._db.conn.execute("SELECT item_id FROM Items WHERE name=?", (item["name"],)).fetchone()
+                if row:
+                    item_id = int(row["item_id"])
+            if item_id is None:
+                continue
             change = item["quantity"] if inv_type == "Purchase" else -item["quantity"]
-            self._db.update_item_stock(item["name"], item["customer_id"], change)
+            self._db.update_item_stock(item_id, item["customer_id"], change)
         return inv_id
 

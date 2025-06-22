@@ -87,7 +87,7 @@ class ReceiptPrinter:
             for it in items:
                 data.append(
                     [
-                        f"{it['item_name']} ({it['customer_id']})",
+                        f"{it['name']} ({it['customer_id']})",
                         str(it["quantity"]),
                         f"{it['unit_price']:.2f}",
                         f"{it['line_total']:.2f}",

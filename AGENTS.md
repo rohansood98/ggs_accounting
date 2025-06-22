@@ -6,4 +6,5 @@
   1. `pip install -e .`
   2. `python -m pytest -q`
 - Keep this file updated with any new guidelines.
+- Database schema uses global Items table with Inventory linking customers to items.
 

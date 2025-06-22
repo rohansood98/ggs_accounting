@@ -56,11 +56,13 @@ class MainWindow(QtWidgets.QMainWindow):
         from .receipt_console import ReceiptConsole
         from .reports_panel import ReportsPanel
         from .reports_party_balance import CustomerBalancePanel
+        from .payment_panel import PaymentPanel
         from .reports_inventory import InventoryValuationPanel
         from .settings_panel import SettingsPanel
 
         self._stack.addTab(InventoryPanel(self._db), "Inventory")
         self._stack.addTab(InvoicePanel(self._db), "Billing")
+        self._stack.addTab(PaymentPanel(self._db), "Payments")
         self._stack.addTab(ReceiptConsole(self._db), "Receipts")
         self._stack.addTab(ReportsPanel(self._db), "SQL")
         self._stack.addTab(CustomerBalancePanel(self._db), "Customer Balances")

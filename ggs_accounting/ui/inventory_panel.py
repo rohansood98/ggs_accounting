@@ -16,6 +16,7 @@ class ItemDialog(QtWidgets.QDialog):
         self.setWindowTitle("Edit Item" if item else "Add Item")
 
         self.name_edit = QtWidgets.QLineEdit()
+        self.code_edit = QtWidgets.QLineEdit()
         self.price_edit = QtWidgets.QDoubleSpinBox()
         self.price_edit.setMaximum(1e9)
         self.price_edit.setPrefix("₹")
@@ -25,6 +26,7 @@ class ItemDialog(QtWidgets.QDialog):
 
         form = QtWidgets.QFormLayout()
         form.addRow("Name", self.name_edit)
+        form.addRow("Code", self.code_edit)
         form.addRow("Price", self.price_edit)
         form.addRow("Stock", self.stock_edit)
         form.addRow("Customer", self.customer_combo)
@@ -49,6 +51,7 @@ class ItemDialog(QtWidgets.QDialog):
 
         if item:
             self.name_edit.setText(item.get("name", ""))
+            self.code_edit.setText(item.get("item_code", ""))
             self.price_edit.setValue(float(item.get("price_excl_tax", 0)))
             self.stock_edit.setValue(float(item.get("stock_qty", 0)))
             idx = self.customer_combo.findData(item.get("customer_id"))
@@ -73,6 +76,7 @@ class ItemDialog(QtWidgets.QDialog):
             return None
         data = {
             "name": name,
+            "item_code": self.code_edit.text().strip(),
             "price_excl_tax": price,
             "stock_qty": self.stock_edit.value(),
             "customer_id": self.customer_combo.currentData(),
@@ -88,7 +92,7 @@ class ItemDialog(QtWidgets.QDialog):
             return
         try:
             if self._item:
-                self._db.update_item(self._item["name"], self._item["customer_id"], **data)
+                self._db.update_item(self._item["item_id"], self._item["customer_id"], **data)
             else:
                 self._db.add_item(**data)
         except Exception as exc:  # pragma: no cover - unexpected errors
@@ -206,7 +210,7 @@ class InventoryPanel(QtWidgets.QWidget):
         )
         if ans == QtWidgets.QMessageBox.StandardButton.Yes:
             try:
-                self._db.delete_item(item["name"], item["customer_id"])
+                self._db.delete_item(item["item_id"], item["customer_id"])
             except Exception as exc:  # pragma: no cover - unexpected errors
                 QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             self._load_items()
