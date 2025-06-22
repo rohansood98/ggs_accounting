@@ -50,3 +50,14 @@ def test_inventory_value_by_customer(tmp_path):
     names = {d["name"] for d in data}
     assert names == {"Apple", "Banana"}
     assert total == pytest.approx(5 * 2.0 + 4 * 3.0)
+
+
+def test_inventory_value_multiple_prices(tmp_path):
+    mgr = create_manager(tmp_path)
+    g = mgr.add_customer("Grower", customer_type="Grower")
+    item = mgr.add_item("Tomato", "TOM", 2.0, 5, customer_id=g)
+    mgr.update_item_stock(item, g, 3.0, 10)
+    data, total = reporting.get_inventory_values(mgr, customer_id=g)
+    values = sorted((d["price"], d["stock"]) for d in data if d["item_id"] == item)
+    assert values == [(2.0, 5), (3.0, 10)]
+    assert total == pytest.approx(5 * 2.0 + 10 * 3.0)

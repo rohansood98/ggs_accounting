@@ -88,8 +88,23 @@ class InvoicePanel(QtWidgets.QWidget):
             all_cust = []
         self._customers = all_cust
         self._growers = [c for c in all_cust if c.get("customer_type") == "Grower"]
-        # self._buyers = [c for c in all_cust if c.get("customer_type") != "Grower"]
-        # Removed self.customer_combo.clear() and self.customer_combo.addItems()
+        for row in range(self.table.rowCount()):
+            cust_combo = self.table.cellWidget(row, 0)
+            src_combo = self.table.cellWidget(row, 2)
+            if isinstance(cust_combo, QtWidgets.QComboBox):
+                current = cust_combo.currentText()
+                cust_combo.clear()
+                cust_combo.addItem("")
+                cust_combo.addItems([c["name"] for c in self._customers])
+                idx = cust_combo.findText(current)
+                cust_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            if isinstance(src_combo, QtWidgets.QComboBox):
+                current = src_combo.currentText()
+                src_combo.clear()
+                src_combo.addItem("")
+                src_combo.addItems([c["name"] for c in self._growers])
+                idx = src_combo.findText(current)
+                src_combo.setCurrentIndex(idx if idx >= 0 else 0)
 
     def _load_items(self) -> None:
         try:
@@ -97,6 +112,15 @@ class InvoicePanel(QtWidgets.QWidget):
         except Exception as exc:  # pragma: no cover
             QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             self._items = []
+        for row in range(self.table.rowCount()):
+            item_combo = self.table.cellWidget(row, 1)
+            if isinstance(item_combo, QtWidgets.QComboBox):
+                current = item_combo.currentText()
+                item_combo.clear()
+                item_combo.addItem("")
+                item_combo.addItems([it["name"] for it in self._items])
+                idx = item_combo.findText(current)
+                item_combo.setCurrentIndex(idx if idx >= 0 else 0)
 
     def _add_customer(self) -> None:
         from ggs_accounting.ui.party_dialog import CustomerDialog
@@ -119,31 +143,38 @@ class InvoicePanel(QtWidgets.QWidget):
         # Customer dropdown per row
         customer_combo = QtWidgets.QComboBox()
         customer_combo.setEditable(True)
+        customer_combo.addItem("")
         customer_combo.addItems([c["name"] for c in self._customers])
         customer_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
+        customer_combo.setCurrentIndex(0)
+        customer_combo.lineEdit().textEdited.connect(customer_combo.showPopup)
         # Item dropdown (independent of customer)
         item_combo = QtWidgets.QComboBox()
         item_combo.setEditable(True)
+        item_combo.addItem("")
         item_combo.addItems([it["name"] for it in self._items])
         item_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
+        item_combo.setCurrentIndex(0)
+        item_combo.lineEdit().textEdited.connect(item_combo.showPopup)
         # Item source dropdown per row
         source_combo = QtWidgets.QComboBox()
         source_combo.setEditable(True)
         if self.type_combo.currentText() == "Sale":
+            source_combo.addItem("")
             source_combo.addItems([c["name"] for c in self._growers])
             source_combo.setEnabled(True)
         else:
             # For purchase, do not preload any names and keep disabled
             source_combo.clear()
             source_combo.setEnabled(False)
+        source_combo.lineEdit().textEdited.connect(source_combo.showPopup)
         qty_spin = QtWidgets.QDoubleSpinBox()
         qty_spin.setMaximum(1e6)
         qty_spin.setValue(1)
         price_spin = QtWidgets.QDoubleSpinBox()
         price_spin.setMaximum(1e9)
         price_spin.setPrefix("₹")
-        if self._items:
-            price_spin.setValue(float(self._items[0].get("price_excl_tax", 0)))
+        price_spin.setValue(0.0)
         total_item = QtWidgets.QTableWidgetItem("₹0.00")
         del_btn = QtWidgets.QPushButton("Delete")
         del_btn.clicked.connect(lambda _, r=row: self._delete_row(r))
