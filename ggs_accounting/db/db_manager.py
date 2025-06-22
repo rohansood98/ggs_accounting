@@ -185,9 +185,20 @@ class DatabaseManager:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "UPDATE Inventory SET stock_qty = stock_qty + ? WHERE item_id=? AND customer_id=? AND price_excl_tax=?",
-                (change, item_id, customer_id, price_excl_tax),
+                "SELECT inventory_id FROM Inventory WHERE item_id=? AND customer_id=? AND price_excl_tax=?",
+                (item_id, customer_id, price_excl_tax),
             )
+            row = cur.fetchone()
+            if row is None:
+                cur.execute(
+                    "INSERT INTO Inventory (customer_id, item_id, price_excl_tax, stock_qty) VALUES (?, ?, ?, ?)",
+                    (customer_id, item_id, price_excl_tax, change),
+                )
+            else:
+                cur.execute(
+                    "UPDATE Inventory SET stock_qty = stock_qty + ? WHERE item_id=? AND customer_id=? AND price_excl_tax=?",
+                    (change, item_id, customer_id, price_excl_tax),
+                )
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
@@ -306,10 +317,6 @@ class DatabaseManager:
                         item["price"] * item["quantity"],
                     ),
                 )
-            if inv_type == "Sale":
-                cur.execute("INSERT INTO Sales (inv_id) VALUES (?)", (inv_id,))
-            elif inv_type == "Purchase":
-                cur.execute("INSERT INTO Purchases (inv_id) VALUES (?)", (inv_id,))
             # Update customer balance for credit transactions
             if is_credit and customer_id:
                 if inv_type == "Sale":
@@ -362,17 +369,21 @@ class DatabaseManager:
             raise RuntimeError(f"Failed to fetch invoice items: {exc}") from exc
 
     # ---- Payments ----
-    def record_payment(self, customer_id: int, amount: float, date: str) -> int:
-        """Record a payment and update balance."""
+    def record_payment(self, customer_id: int, amount: float, date: str, received: bool = True) -> int:
+        """Record a payment and update balance.
+
+        If ``received`` is True the customer paid us and their balance decreases.
+        If False we paid the customer and their balance increases.
+        """
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO Payments (customer_id, date, amount) VALUES (?, ?, ?)",
-                (customer_id, date, amount),
+                "INSERT INTO Payments (customer_id, date, amount, received) VALUES (?, ?, ?, ?)",
+                (customer_id, date, amount, int(received)),
             )
             cur.execute(
-                "UPDATE Customers SET balance = balance - ? WHERE customer_id=?",
-                (amount, customer_id),
+                "UPDATE Customers SET balance = balance + ? WHERE customer_id=?",
+                (-amount if received else amount, customer_id),
             )
             self.conn.commit()
             if cur.lastrowid is None:
@@ -509,14 +520,6 @@ CREATE_TABLE_QUERIES = [
         FOREIGN KEY(customer_id) REFERENCES Customers(customer_id),
         FOREIGN KEY(source_id) REFERENCES Customers(customer_id)
     )""",
-    """CREATE TABLE IF NOT EXISTS Sales(
-        inv_id INTEGER PRIMARY KEY,
-        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
-    )""",
-    """CREATE TABLE IF NOT EXISTS Purchases(
-        inv_id INTEGER PRIMARY KEY,
-        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
-    )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,
         value TEXT
@@ -531,6 +534,7 @@ CREATE_TABLE_QUERIES = [
         customer_id INTEGER NOT NULL,
         date TEXT NOT NULL,
         amount REAL NOT NULL,
+        received INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )""",
 ]

@@ -75,18 +75,7 @@ def get_inventory_values(
     total_value = 0.0
 
     for r in rows:
-        # Use last purchase price from InvoiceItems if available
-        cur.execute(
-            """
-            SELECT unit_price FROM InvoiceItems
-            JOIN Invoices ON Invoices.inv_id = InvoiceItems.inv_id
-            WHERE InvoiceItems.item_id=? AND InvoiceItems.customer_id=? AND Invoices.type='Purchase'
-            ORDER BY Invoices.date DESC, InvoiceItems.id DESC LIMIT 1
-            """,
-            (r["item_id"], r["customer_id"]),
-        )
-        price_row = cur.fetchone()
-        price = price_row[0] if price_row else r["price_excl_tax"]
+        price = r["price_excl_tax"]
         value = r["stock_qty"] * price
         data.append({
             "item_id": r["item_id"],

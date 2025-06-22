@@ -64,14 +64,6 @@ CREATE_TABLE_QUERIES = [
         FOREIGN KEY(customer_id) REFERENCES Customers(customer_id),
         FOREIGN KEY(source_id) REFERENCES Customers(customer_id)
     )""",
-    """CREATE TABLE IF NOT EXISTS Sales(
-        inv_id INTEGER PRIMARY KEY,
-        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
-    )""",
-    """CREATE TABLE IF NOT EXISTS Purchases(
-        inv_id INTEGER PRIMARY KEY,
-        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
-    )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,
         value TEXT
@@ -80,6 +72,14 @@ CREATE_TABLE_QUERIES = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         sql TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS Payments(
+        payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        amount REAL NOT NULL,
+        received INTEGER NOT NULL DEFAULT 1,
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )"""
 ]
 

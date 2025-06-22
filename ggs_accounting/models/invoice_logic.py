@@ -37,31 +37,36 @@ class InvoiceLogic:
             item_id = item.get("item_id")
             if item_id is None:
                 # Fallback to lookup by name
-                row = self._db.conn.execute("SELECT item_id FROM Items WHERE name=?", (item["name"],)).fetchone()
+                row = self._db.conn.execute(
+                    "SELECT item_id FROM Items WHERE name=?",
+                    (item["name"],),
+                ).fetchone()
                 if row:
                     item_id = int(row["item_id"])
             if item_id is None:
                 continue
-            price_excl_tax = item.get("price_excl_tax")
-            if price_excl_tax is None:
-                # Fallback: fetch from Inventory
-                lookup_id = item.get("source_id") if inv_type == "Sale" else item.get("customer_id")
-                row = self._db.conn.execute(
-                    "SELECT price_excl_tax FROM Inventory WHERE item_id=? AND customer_id=? ORDER BY inventory_id DESC LIMIT 1",
-                    (item_id, lookup_id),
-                ).fetchone()
-                if row:
-                    price_excl_tax = row["price_excl_tax"]
-                else:
-                    raise KeyError("price_excl_tax")
+
+            # Determine which party's inventory is affected
             if inv_type == "Purchase":
                 party_id = item.get("customer_id")
                 change = item["quantity"]
+                price_excl_tax = item.get("price_excl_tax", item.get("price"))
             else:
                 party_id = item.get("source_id")
                 change = -item["quantity"]
+                # Use the latest purchase price for this supplier when reducing stock
+                row = self._db.conn.execute(
+                    "SELECT price_excl_tax FROM Inventory WHERE item_id=? AND customer_id=? ORDER BY inventory_id DESC LIMIT 1",
+                    (item_id, party_id),
+                ).fetchone()
+                price_excl_tax = row["price_excl_tax"] if row else item.get("price_excl_tax", item.get("price"))
+
             if party_id is None:
                 raise RuntimeError("Missing inventory party reference")
+
+            if price_excl_tax is None:
+                raise RuntimeError("Missing item price for inventory update")
+
             self._db.update_item_stock(item_id, party_id, price_excl_tax, change)
         return inv_id
 

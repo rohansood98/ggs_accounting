@@ -12,8 +12,7 @@ def test_init_creates_tables_and_admin(tmp_path):
     mgr = create_manager(tmp_path)
     tables = {row[0] for row in mgr.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "Users" in tables
-    assert "Sales" in tables
-    assert "Purchases" in tables
+    assert "Payments" in tables
     assert mgr.verify_user("admin", "admin") == "Admin"
 
 
@@ -54,4 +53,30 @@ def test_settings(tmp_path):
     mgr = create_manager(tmp_path)
     mgr.set_setting("GST", "5")
     assert mgr.get_setting("GST") == "5"
+
+
+def test_record_payment_direction(tmp_path):
+    mgr = create_manager(tmp_path)
+    cid = mgr.add_customer("Cust")
+    mgr.update_customer_balance(cid, 100)
+    mgr.record_payment(cid, 30, "2024-01-05", received=True)
+    bal = mgr.conn.execute("SELECT balance FROM Customers WHERE customer_id=?", (cid,)).fetchone()[0]
+    assert bal == 70
+    mgr.record_payment(cid, 20, "2024-01-06", received=False)
+    bal = mgr.conn.execute("SELECT balance FROM Customers WHERE customer_id=?", (cid,)).fetchone()[0]
+    assert bal == 90
+
+
+def test_update_item_stock_new_price(tmp_path):
+    mgr = create_manager(tmp_path)
+    grower = mgr.add_customer("Grower", customer_type="Grower")
+    item = mgr.add_item("Apple", "APL", 5.0, 10, customer_id=grower)
+    # Purchase at new price should create new inventory row
+    mgr.update_item_stock(item, grower, 6.0, 5)
+    rows = list(mgr.conn.execute(
+        "SELECT price_excl_tax, stock_qty FROM Inventory WHERE item_id=? AND customer_id=? ORDER BY price_excl_tax",
+        (item, grower),
+    ))
+    assert len(rows) == 2
+    assert rows[1][0] == 6.0 and rows[1][1] == 5
 

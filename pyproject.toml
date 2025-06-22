@@ -10,6 +10,7 @@ dependencies = [
     "pydantic",
     "reportlab",
     "pandas",
+    "openpyxl",
 ]
 
 [tool.setuptools.packages.find]

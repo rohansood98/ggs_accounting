@@ -39,3 +39,16 @@ def test_inventory_filter(tmp_path):
     assert panel.table.rowCount() == 1
     assert panel.table.item(0, 0).text() == "Apple"
 
+
+def test_inventory_panel_multiple_purchase_rows(tmp_path):
+    ensure_app()
+    mgr = create_manager(tmp_path)
+    g = mgr.add_customer("Grower", customer_type="Grower")
+    item = mgr.add_item("Tomato", "TM", 2.0, 5, customer_id=g)
+    # new purchase at different price creates separate row
+    mgr.update_item_stock(item, g, 3.0, 10)
+    panel = InventoryPanel(mgr)
+    names = [panel.table.item(r, 0).text() for r in range(panel.table.rowCount())]
+    tomato_rows = [i for i, n in enumerate(names) if n == "Tomato"]
+    assert len(tomato_rows) == 2
+
