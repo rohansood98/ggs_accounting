@@ -1,5 +1,6 @@
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["QT_QPA_FONTDIR"] = os.path.abspath("ggs_accounting/fonts/ttf")
 from PyQt6 import QtWidgets
 from ggs_accounting.db.db_manager import DatabaseManager
 from ggs_accounting.ui.login_dialog import LoginDialog
@@ -33,6 +34,9 @@ def main():
     app = QtWidgets.QApplication([])
     login = LoginDialog(db)
     if login.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+        if login.user_role is None:
+            print("Login failed: user role is None.")
+            return
         window = MainWindow(login.user_role)
         window.show()
         app.exec()

@@ -56,7 +56,10 @@ class DatabaseManager:
                 (username, hash_password(password), role),
             )
             self.conn.commit()
-            return cur.lastrowid
+            lastrowid = cur.lastrowid
+            if lastrowid is None:
+                raise RuntimeError("Failed to retrieve lastrowid after creating user.")
+            return lastrowid
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to create user: {exc}") from exc
@@ -81,7 +84,10 @@ class DatabaseManager:
                 (name, category, price_excl_tax, stock_qty),
             )
             self.conn.commit()
-            return cur.lastrowid
+            lastrowid = cur.lastrowid
+            if lastrowid is None:
+                raise RuntimeError("Failed to retrieve lastrowid after adding item.")
+            return lastrowid
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to add item: {exc}") from exc
@@ -127,7 +133,10 @@ class DatabaseManager:
                 (name, contact_info),
             )
             self.conn.commit()
-            return cur.lastrowid
+            lastrowid = cur.lastrowid
+            if lastrowid is None:
+                raise RuntimeError("Failed to retrieve lastrowid after adding party.")
+            return lastrowid
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to add party: {exc}") from exc
@@ -162,6 +171,8 @@ class DatabaseManager:
                 (date, inv_type, party_id, subtotal, tax_amount, total, int(is_credit)),
             )
             inv_id = cur.lastrowid
+            if inv_id is None:
+                raise RuntimeError("Failed to retrieve lastrowid after creating invoice.")
             for item in items:
                 cur.execute(
                     "INSERT INTO InvoiceItems (inv_id, item_id, quantity, price, tax_amount) VALUES (?, ?, ?, ?, ?)",
@@ -232,19 +243,13 @@ class DatabaseManager:
                 (name, sql),
             )
             self.conn.commit()
-            return cur.lastrowid
+            lastrowid = cur.lastrowid
+            if lastrowid is None:
+                raise RuntimeError("Failed to retrieve lastrowid after saving query.")
+            return lastrowid
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to save query: {exc}") from exc
-
-    def get_saved_queries(self) -> List[Dict[str, Any]]:
-        cur = self.conn.cursor()
-        try:
-            cur.execute("SELECT * FROM SavedQueries")
-            rows = cur.fetchall()
-            return [dict(row) for row in rows]
-        except sqlite3.Error as exc:
-            raise RuntimeError(f"Failed to fetch saved queries: {exc}") from exc
 
 
 CREATE_TABLE_QUERIES = [
