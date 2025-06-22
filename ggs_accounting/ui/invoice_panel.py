@@ -28,12 +28,15 @@ class InvoicePanel(QtWidgets.QWidget):
         self.type_combo = QtWidgets.QComboBox()
         self.type_combo.addItems(["Sale", "Purchase"])
 
+        party_row = QtWidgets.QHBoxLayout()
         self.party_combo = QtWidgets.QComboBox()
         add_party_btn = QtWidgets.QPushButton("Add Party")
         add_party_btn.clicked.connect(self._add_party)
+
         party_layout = QtWidgets.QHBoxLayout()
         party_layout.addWidget(self.party_combo)
         party_layout.addWidget(add_party_btn)
+
 
         self.date_edit = QtWidgets.QDateEdit()
         self.date_edit.setCalendarPopup(True)
@@ -41,6 +44,7 @@ class InvoicePanel(QtWidgets.QWidget):
 
         form.addRow("Type", self.type_combo)
         form.addRow("Party", party_layout)
+        form.addRow("Party", party_row)
         form.addRow("Date", self.date_edit)
         layout.addLayout(form)
 
@@ -166,4 +170,20 @@ class InvoicePanel(QtWidgets.QWidget):
         self.table.setRowCount(0)
         self._recalc_totals()
         QtWidgets.QMessageBox.information(self, "Saved", "Invoice saved")
+
+    def _add_party(self):
+        from ggs_accounting.ui.party_dialog import PartyDialog
+        dlg = PartyDialog(self)
+        if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            name, contact = dlg.get_data()
+            if name:
+                try:
+                    self._db.add_party(name, contact)
+                    self._load_parties()
+                    # Select the newly added party
+                    idx = self.party_combo.findText(name)
+                    if idx >= 0:
+                        self.party_combo.setCurrentIndex(idx)
+                except Exception as exc:
+                    QtWidgets.QMessageBox.critical(self, "Error", str(exc))
 

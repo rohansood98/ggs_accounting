@@ -2,6 +2,8 @@ from PyQt6 import QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from ggs_accounting.models.auth import UserRole
+from ggs_accounting.ui.inventory_panel import InventoryPanel
+from ggs_accounting.ui.invoice_panel import InvoicePanel
 from ggs_accounting.db.db_manager import DatabaseManager
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -9,6 +11,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     logout_requested = pyqtSignal()
     exit_requested = pyqtSignal()  # Add a new signal for exit
+
 
     def __init__(self, db: DatabaseManager, user_role: str) -> None:
         super().__init__()
@@ -22,6 +25,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar().showMessage("Ready")
 
         self._settings_index: int | None = None
+        self._db = db  # Store db for use in panels
         self._init_tabs()
         self._init_menu()
 
@@ -55,6 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._stack.addTab(PartyBalancePanel(self._db), "Party Balances")
         self._stack.addTab(InventoryValuationPanel(self._db), "Inventory Value")
         self._stack.addTab(self._create_placeholder("Backup"), "Backup")
+
         if self._role is UserRole.ADMIN:
             settings_widget = SettingsPanel(self._db)
             self._settings_index = self._stack.addTab(settings_widget, "Settings")
