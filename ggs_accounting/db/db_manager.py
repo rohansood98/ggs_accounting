@@ -133,6 +133,19 @@ class DatabaseManager:
             self.conn.rollback()
             raise RuntimeError(f"Failed to delete item: {exc}") from exc
 
+    def update_item_stock(self, item_id: int, change: float) -> None:
+        """Increment item stock by ``change`` which may be negative."""
+        cur = self.conn.cursor()
+        try:
+            cur.execute(
+                "UPDATE Items SET stock_qty = stock_qty + ? WHERE item_id=?",
+                (change, item_id),
+            )
+            self.conn.commit()
+        except sqlite3.Error as exc:
+            self.conn.rollback()
+            raise RuntimeError(f"Failed to update item stock: {exc}") from exc
+
     def get_all_items(self) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
         try:
@@ -168,6 +181,15 @@ class DatabaseManager:
             self.conn.rollback()
             raise RuntimeError(f"Failed to update party balance: {exc}") from exc
 
+    def get_all_parties(self) -> List[Dict[str, Any]]:
+        cur = self.conn.cursor()
+        try:
+            cur.execute("SELECT * FROM Parties")
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as exc:
+            raise RuntimeError(f"Failed to fetch parties: {exc}") from exc
+
     # ---- Invoices ----
     def create_invoice(
         self,
@@ -180,30 +202,28 @@ class DatabaseManager:
         cur = self.conn.cursor()
         try:
             subtotal = sum(item["price"] * item["quantity"] for item in items)
-            tax_amount = sum(item.get("tax_amount", 0) for item in items)
-            total = subtotal + tax_amount
             cur.execute(
                 """INSERT INTO Invoices
-                   (date, type, party_id, subtotal, tax_amount, total_amount, is_credit)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (date, inv_type, party_id, subtotal, tax_amount, total, int(is_credit)),
+                   (date, type, party_id, subtotal, total_amount, is_credit)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (date, inv_type, party_id, subtotal, subtotal, int(is_credit)),
             )
             inv_id = cur.lastrowid
             if inv_id is None:
                 raise RuntimeError("Failed to retrieve lastrowid after creating invoice.")
             for item in items:
                 cur.execute(
-                    "INSERT INTO InvoiceItems (inv_id, item_id, quantity, price, tax_amount) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO InvoiceItems (inv_id, item_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?)",
                     (
                         inv_id,
                         item["item_id"],
                         item["quantity"],
                         item["price"],
-                        item.get("tax_amount", 0),
+                        item["price"] * item["quantity"],
                     ),
                 )
             if is_credit and party_id:
-                cur.execute("UPDATE Parties SET balance = balance + ? WHERE party_id=?", (total, party_id))
+                cur.execute("UPDATE Parties SET balance = balance + ? WHERE party_id=?", (subtotal, party_id))
             self.conn.commit()
             return inv_id
         except sqlite3.Error as exc:
@@ -296,7 +316,6 @@ CREATE_TABLE_QUERIES = [
         type TEXT NOT NULL,
         party_id INTEGER,
         subtotal REAL NOT NULL,
-        tax_amount REAL NOT NULL,
         total_amount REAL NOT NULL,
         is_credit INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY(party_id) REFERENCES Parties(party_id)
@@ -306,8 +325,8 @@ CREATE_TABLE_QUERIES = [
         inv_id INTEGER NOT NULL,
         item_id INTEGER NOT NULL,
         quantity REAL NOT NULL,
-        price REAL NOT NULL,
-        tax_amount REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
         FOREIGN KEY(item_id) REFERENCES Items(item_id)
     )""",

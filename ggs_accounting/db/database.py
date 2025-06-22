@@ -32,7 +32,6 @@ CREATE_TABLE_QUERIES = [
         type TEXT NOT NULL,
         party_id INTEGER,
         subtotal REAL NOT NULL,
-        tax_amount REAL NOT NULL,
         total_amount REAL NOT NULL,
         is_credit INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY(party_id) REFERENCES Parties(party_id)
@@ -42,8 +41,8 @@ CREATE_TABLE_QUERIES = [
         inv_id INTEGER NOT NULL,
         item_id INTEGER NOT NULL,
         quantity REAL NOT NULL,
-        price REAL NOT NULL,
-        tax_amount REAL NOT NULL,
+        unit_price REAL NOT NULL,
+        line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
         FOREIGN KEY(item_id) REFERENCES Items(item_id)
     )""",
