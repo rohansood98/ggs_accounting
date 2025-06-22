@@ -295,16 +295,21 @@ class DatabaseManager:
                         raise RuntimeError("Unknown item")
                     item_id = int(row["item_id"])
                 cur.execute(
-                    "INSERT INTO InvoiceItems (inv_id, item_id, customer_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO InvoiceItems (inv_id, item_id, customer_id, source_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         inv_id,
                         item_id,
-                        item["customer_id"],
+                        item.get("customer_id"),
+                        item.get("source_id"),
                         item["quantity"],
                         item["price"],
                         item["price"] * item["quantity"],
                     ),
                 )
+            if inv_type == "Sale":
+                cur.execute("INSERT INTO Sales (inv_id) VALUES (?)", (inv_id,))
+            elif inv_type == "Purchase":
+                cur.execute("INSERT INTO Purchases (inv_id) VALUES (?)", (inv_id,))
             # Update customer balance for credit transactions
             if is_credit and customer_id:
                 if inv_type == "Sale":
@@ -495,12 +500,22 @@ CREATE_TABLE_QUERIES = [
         inv_id INTEGER NOT NULL,
         item_id INTEGER NOT NULL,
         customer_id INTEGER NOT NULL,
+        source_id INTEGER,
         quantity REAL NOT NULL,
         unit_price REAL NOT NULL,
         line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
         FOREIGN KEY(item_id) REFERENCES Items(item_id),
-        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id),
+        FOREIGN KEY(source_id) REFERENCES Customers(customer_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS Sales(
+        inv_id INTEGER PRIMARY KEY,
+        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS Purchases(
+        inv_id INTEGER PRIMARY KEY,
+        FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,

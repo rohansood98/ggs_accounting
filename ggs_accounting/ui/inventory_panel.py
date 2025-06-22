@@ -221,7 +221,7 @@ class InventoryPanel(QtWidgets.QWidget):
         )
         if ans == QtWidgets.QMessageBox.StandardButton.Yes:
             try:
-                self._db.delete_item(item["item_id"], item["customer_id"], item["price_excl_tax"])
+                self._db.delete_item(item["item_id"], item["customer_id"])
             except Exception as exc:  # pragma: no cover - unexpected errors
                 QtWidgets.QMessageBox.critical(self, "Error", str(exc))
             self._load_items()

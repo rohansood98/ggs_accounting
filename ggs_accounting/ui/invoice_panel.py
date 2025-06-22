@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import Qt
 from datetime import date
-from typing import List, Dict, Any, cast
+from typing import List, Dict, Any, cast, Tuple, Optional
 
 from ggs_accounting.db.db_manager import DatabaseManager
 from ggs_accounting.models.invoice_logic import InvoiceLogic
@@ -165,8 +165,9 @@ class InvoicePanel(QtWidgets.QWidget):
         self.table.removeRow(row)
         self._recalc_totals()
 
-    def _gather_items(self) -> List[Dict[str, Any]]:
+    def _gather_items(self) -> Tuple[Optional[int], List[Dict[str, Any]]]:
         items: List[Dict[str, Any]] = []
+        inv_customer_id: Optional[int] = None
         is_purchase = self.type_combo.currentText() == "Purchase"
         for row in range(self.table.rowCount()):
             customer_widget = self.table.cellWidget(row, 0)
@@ -253,6 +254,8 @@ class InvoicePanel(QtWidgets.QWidget):
             price = float(cast(QtWidgets.QDoubleSpinBox, price_widget).value())
             # For purchase, set customer_id as supplier and source_id as None
             # For sale, set customer_id as buyer and source_id as supplier
+            if inv_customer_id is None:
+                inv_customer_id = customer["customer_id"]
             item_dict = {
                 "item_id": item["item_id"],
                 "name": item_name,
@@ -260,10 +263,10 @@ class InvoicePanel(QtWidgets.QWidget):
                 "source_id": None if is_purchase else (source["customer_id"] if source else None),
                 "quantity": quantity,
                 "price": price,
-                "price_excl_tax": price
+                "price_excl_tax": price,
             }
             items.append(item_dict)
-        return items
+        return inv_customer_id, items
 
     def _recalc_totals(self) -> None:
         subtotal = 0.0
@@ -283,21 +286,13 @@ class InvoicePanel(QtWidgets.QWidget):
 
     # ---- Save ----
     def _save_invoice(self) -> None:
-        items = self._gather_items()
+        customer_id, items = self._gather_items()
         if not items:
             QtWidgets.QMessageBox.warning(self, "Validation", "Add at least one item")
             return
         inv_type = self.type_combo.currentText()
         date_str = self.date_edit.date().toString("yyyy-MM-dd")
-        # Determine the correct customer_id for the invoice
-        if inv_type == "Sale":
-            # For sales, the buyer is the invoice customer
-            customer_id = items[0]["customer_id"] if items else None
-        elif inv_type == "Purchase":
-            # For purchases, the grower is the invoice customer
-            customer_id = items[0]["customer_id"] if items else None
-        else:
-            customer_id = None
+        # customer_id already determined in _gather_items
         try:
             self._logic.create_invoice(
                 inv_type,
