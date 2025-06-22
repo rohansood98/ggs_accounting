@@ -32,13 +32,15 @@ def main():
         return
 
     app = QtWidgets.QApplication([])
+    QtWidgets.QApplication.setStyle("Fusion")
     while True:
         login = LoginDialog(db)
         if login.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             if login.user_role is None:
                 print("Login failed: user role is None.")
                 continue
-            window = MainWindow(login.user_role, db)
+            window = MainWindow(db, login.user_role)
+
             # Track if exit was requested
             exit_flag = {'exit': False}
             def set_exit():

@@ -8,6 +8,8 @@ dependencies = [
     "PyQt6",
     "pytest",
     "pydantic",
+    "reportlab",
+    "pandas",
 ]
 
 [tool.setuptools.packages.find]

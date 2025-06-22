@@ -12,8 +12,10 @@ class MainWindow(QtWidgets.QMainWindow):
     logout_requested = pyqtSignal()
     exit_requested = pyqtSignal()  # Add a new signal for exit
 
-    def __init__(self, user_role: str, db: DatabaseManager = None) -> None:
+
+    def __init__(self, db: DatabaseManager, user_role: str) -> None:
         super().__init__()
+        self._db = db
         self._role = UserRole(user_role)
         self.setWindowTitle("Wholesale Billing System")
         self.resize(800, 600)
@@ -42,13 +44,24 @@ class MainWindow(QtWidgets.QMainWindow):
         exit_action.triggered.connect(self._handle_exit)
 
     def _init_tabs(self) -> None:
-        # Replace placeholders with real panels for Inventory and Billing
+        from .inventory_panel import InventoryPanel
+        from .invoice_panel import InvoicePanel
+        from .receipt_console import ReceiptConsole
+        from .reports_panel import ReportsPanel
+        from .reports_party_balance import PartyBalancePanel
+        from .reports_inventory import InventoryValuationPanel
+        from .settings_panel import SettingsPanel
+
         self._stack.addTab(InventoryPanel(self._db), "Inventory")
         self._stack.addTab(InvoicePanel(self._db), "Billing")
-        for name in ["Reports", "Backup"]:
-            self._stack.addTab(self._create_placeholder(name), name)
+        self._stack.addTab(ReceiptConsole(self._db), "Receipts")
+        self._stack.addTab(ReportsPanel(self._db), "SQL")
+        self._stack.addTab(PartyBalancePanel(self._db), "Party Balances")
+        self._stack.addTab(InventoryValuationPanel(self._db), "Inventory Value")
+        self._stack.addTab(self._create_placeholder("Backup"), "Backup")
+
         if self._role is UserRole.ADMIN:
-            settings_widget = self._create_placeholder("Settings")
+            settings_widget = SettingsPanel(self._db)
             self._settings_index = self._stack.addTab(settings_widget, "Settings")
 
     def _create_placeholder(self, title: str) -> QtWidgets.QWidget:
