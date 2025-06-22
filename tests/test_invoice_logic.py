@@ -14,19 +14,19 @@ def create_manager(tmp_path):
 
 def test_invoice_logic_updates_stock(tmp_path):
     mgr = create_manager(tmp_path)
-    grower_id = mgr.add_customer("Grower", customer_type="Grower")
-    mgr.add_item("Banana", 5.0, 10, grower_id=grower_id)
-    customer_id = mgr.add_customer("Customer")
+    customer_id = mgr.add_customer("Grower", customer_type="Grower")
+    mgr.add_item("Banana", 5.0, 10, customer_id=customer_id)
+    buyer_id = mgr.add_customer("Customer")
     logic = InvoiceLogic(mgr)
     logic.create_invoice(
         "Sale",
-        customer_id,
-        [{"name": "Banana", "grower_id": grower_id, "quantity": 4, "price": 5.0}],
+        buyer_id,
+        [{"name": "Banana", "customer_id": customer_id, "quantity": 4, "price": 5.0}],
         date="2024-01-02",
         is_credit=True,
     )
-    qty = mgr.conn.execute("SELECT stock_qty FROM Items WHERE name=? AND grower_id=?", ("Banana", grower_id)).fetchone()[0]
+    qty = mgr.conn.execute("SELECT stock_qty FROM Items WHERE name=? AND customer_id=?", ("Banana", customer_id)).fetchone()[0]
     assert qty == 6
-    bal = mgr.conn.execute("SELECT balance FROM Customers WHERE customer_id=?", (customer_id,)).fetchone()[0]
+    bal = mgr.conn.execute("SELECT balance FROM Customers WHERE customer_id=?", (buyer_id,)).fetchone()[0]
     assert bal == 20.0
 

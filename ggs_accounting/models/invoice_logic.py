@@ -33,6 +33,6 @@ class InvoiceLogic:
         )
         for item in items:
             change = item["quantity"] if inv_type == "Purchase" else -item["quantity"]
-            self._db.update_item_stock(item["name"], item["grower_id"], change)
+            self._db.update_item_stock(item["name"], item["customer_id"], change)
         return inv_id
 

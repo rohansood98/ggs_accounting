@@ -34,7 +34,7 @@ def test_party_balance_logic(tmp_path):
 
 def test_inventory_value(tmp_path):
     mgr = create_manager(tmp_path)
-    grower = mgr.add_customer("Grower", customer_type="Grower")
-    mgr.add_item("Item", 2.0, 5, grower_id=grower)
+    customer_id = mgr.add_customer("Grower", customer_type="Grower")
+    mgr.add_item("Item", 2.0, 5, customer_id=customer_id)
     data, total = reporting.get_inventory_values(mgr)
     assert total == 10.0

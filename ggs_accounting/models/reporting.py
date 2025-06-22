@@ -8,14 +8,14 @@ from ggs_accounting.db.db_manager import DatabaseManager
 BUILT_IN_QUERIES: dict[str, str] = {
     "Outstanding Balances": "SELECT name, balance FROM Customers WHERE balance <> 0",
     "Top Selling Items": (
-        "SELECT item_name, grower_id, SUM(quantity) AS total_sold\n"
+        "SELECT item_name, customer_id, SUM(quantity) AS total_sold\n"
         "FROM InvoiceItems\n"
         "JOIN Invoices ON Invoices.inv_id = InvoiceItems.inv_id\n"
         "WHERE Invoices.date >= date('now', '-30 days') AND Invoices.type = 'Sale'\n"
-        "GROUP BY item_name, grower_id\n"
+        "GROUP BY item_name, customer_id\n"
         "ORDER BY total_sold DESC"
     ),
-    "Low Stock Items": "SELECT name, grower_id, stock_qty FROM Items WHERE stock_qty < 10",
+    "Low Stock Items": "SELECT name, customer_id, stock_qty FROM Items WHERE stock_qty < 10",
     "Recent Sales": (
         "SELECT date, total_amount FROM Invoices\n"
         "WHERE type = 'Sale'\n"

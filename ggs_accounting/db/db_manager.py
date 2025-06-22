@@ -99,33 +99,33 @@ class DatabaseManager:
         name: str,
         price_excl_tax: float,
         stock_qty: float,
-        grower_id: Optional[int] = None,
+        customer_id: Optional[int] = None,
     ) -> None:
         name = camel_case(name)
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "INSERT INTO Items (name, grower_id, price_excl_tax, stock_qty) VALUES (?, ?, ?, ?)",
-                (name, grower_id, price_excl_tax, stock_qty),
+                "INSERT INTO Items (name, customer_id, price_excl_tax, stock_qty) VALUES (?, ?, ?, ?)",
+                (name, customer_id, price_excl_tax, stock_qty),
             )
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to add item: {exc}") from exc
 
-    def update_item(self, name: str, grower_id: int, **kwargs) -> None:
-        allowed = {"name", "grower_id", "price_excl_tax", "stock_qty"}
+    def update_item(self, name: str, customer_id: int, **kwargs) -> None:
+        allowed = {"name", "customer_id", "price_excl_tax", "stock_qty"}
         if "name" in kwargs:
             kwargs["name"] = camel_case(str(kwargs["name"]))
         fields = [f"{k}=?" for k in kwargs if k in allowed]
         values = [kwargs[k] for k in kwargs if k in allowed]
         if not fields:
             return
-        values.extend([name, grower_id])
+        values.extend([name, customer_id])
         cur = self.conn.cursor()
         try:
             cur.execute(
-                f"UPDATE Items SET {', '.join(fields)} WHERE name=? AND grower_id=?",
+                f"UPDATE Items SET {', '.join(fields)} WHERE name=? AND customer_id=?",
                 values,
             )
             self.conn.commit()
@@ -133,22 +133,24 @@ class DatabaseManager:
             self.conn.rollback()
             raise RuntimeError(f"Failed to update item: {exc}") from exc
 
-    def delete_item(self, name: str, grower_id: int) -> None:
+    def delete_item(self, name: str, customer_id: int) -> None:
         cur = self.conn.cursor()
         try:
-            cur.execute("DELETE FROM Items WHERE name=? AND grower_id=?", (name, grower_id))
+            cur.execute(
+                "DELETE FROM Items WHERE name=? AND customer_id=?",
+                (name, customer_id),
+            )
             self.conn.commit()
         except sqlite3.Error as exc:
             self.conn.rollback()
             raise RuntimeError(f"Failed to delete item: {exc}") from exc
 
-    def update_item_stock(self, name: str, grower_id: int, change: float) -> None:
-        """Increment item stock by ``change`` which may be negative."""
+    def update_item_stock(self, name: str, customer_id: int, change: float) -> None:
         cur = self.conn.cursor()
         try:
             cur.execute(
-                "UPDATE Items SET stock_qty = stock_qty + ? WHERE name=? AND grower_id=?",
-                (change, name, grower_id),
+                "UPDATE Items SET stock_qty = stock_qty + ? WHERE name=? AND customer_id=?",
+                (change, name, customer_id),
             )
             self.conn.commit()
         except sqlite3.Error as exc:
@@ -242,11 +244,11 @@ class DatabaseManager:
                 raise RuntimeError("Failed to retrieve lastrowid after creating invoice.")
             for item in items:
                 cur.execute(
-                    "INSERT INTO InvoiceItems (inv_id, item_name, grower_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO InvoiceItems (inv_id, item_name, customer_id, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)",
                     (
                         inv_id,
                         item["name"],
-                        item["grower_id"],
+                        item["customer_id"],
                         item["quantity"],
                         item["price"],
                         item["price"] * item["quantity"],
@@ -355,11 +357,11 @@ CREATE_TABLE_QUERIES = [
     )""",
     """CREATE TABLE IF NOT EXISTS Items(
         name TEXT NOT NULL,
-        grower_id INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
         price_excl_tax REAL NOT NULL,
         stock_qty REAL NOT NULL DEFAULT 0,
-        PRIMARY KEY(name, grower_id),
-        FOREIGN KEY(grower_id) REFERENCES Customers(customer_id)
+        PRIMARY KEY(name, customer_id),
+        FOREIGN KEY(customer_id) REFERENCES Customers(customer_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Customers(
         customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -382,12 +384,12 @@ CREATE_TABLE_QUERIES = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         inv_id INTEGER NOT NULL,
         item_name TEXT NOT NULL,
-        grower_id INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
         quantity REAL NOT NULL,
         unit_price REAL NOT NULL,
         line_total REAL NOT NULL,
         FOREIGN KEY(inv_id) REFERENCES Invoices(inv_id),
-        FOREIGN KEY(item_name, grower_id) REFERENCES Items(name, grower_id)
+        FOREIGN KEY(item_name, customer_id) REFERENCES Items(name, customer_id)
     )""",
     """CREATE TABLE IF NOT EXISTS Settings(
         key TEXT PRIMARY KEY,
