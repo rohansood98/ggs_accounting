@@ -1,5 +1,5 @@
 import os
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["QT_QPA_FONTDIR"] = os.path.abspath("ggs_accounting/fonts/ttf")
 from PyQt6 import QtWidgets
 from ggs_accounting.db.db_manager import DatabaseManager
@@ -32,14 +32,26 @@ def main():
         return
 
     app = QtWidgets.QApplication([])
-    login = LoginDialog(db)
-    if login.exec() == QtWidgets.QDialog.DialogCode.Accepted:
-        if login.user_role is None:
-            print("Login failed: user role is None.")
-            return
-        window = MainWindow(login.user_role)
-        window.show()
-        app.exec()
+    while True:
+        login = LoginDialog(db)
+        if login.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            if login.user_role is None:
+                print("Login failed: user role is None.")
+                continue
+            window = MainWindow(login.user_role)
+            # Track if exit was requested
+            exit_flag = {'exit': False}
+            def set_exit():
+                exit_flag['exit'] = True
+            window.logout_requested.connect(window.close)
+            window.exit_requested.connect(set_exit)
+            window.exit_requested.connect(window.close)
+            window.show()
+            app.exec()
+            if exit_flag['exit']:
+                break
+        else:
+            break
 
 
 if __name__ == "__main__":

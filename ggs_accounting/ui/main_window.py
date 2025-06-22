@@ -7,6 +7,7 @@ class MainWindow(QtWidgets.QMainWindow):
     """Main application shell."""
 
     logout_requested = pyqtSignal()
+    exit_requested = pyqtSignal()  # Add a new signal for exit
 
     def __init__(self, user_role: str) -> None:
         super().__init__()
@@ -24,15 +25,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _init_menu(self) -> None:
         menubar = self.menuBar()
-        file_menu = menubar.addMenu("File")
+        # Explicitly create a QMenu and add it to the menubar
+        file_menu = QtWidgets.QMenu("File", self)
+        menubar.addMenu(file_menu)
         logout_action = file_menu.addAction("Logout")
         logout_action.triggered.connect(self._handle_logout)
-        exit_action = file_menu.addAction("Exit")
-        exit_action.triggered.connect(QtWidgets.QApplication.quit)
-
+        # Insert Settings above Exit if admin
         if self._role is UserRole.ADMIN:
             settings_action = file_menu.addAction("Settings")
             settings_action.triggered.connect(self._open_settings_tab)
+        exit_action = file_menu.addAction("Exit")
+        exit_action.triggered.connect(self._handle_exit)
 
     def _init_tabs(self) -> None:
         for name in ["Inventory", "Billing", "Reports", "Backup"]:
@@ -56,3 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _handle_logout(self) -> None:
         self.close()
         self.logout_requested.emit()
+
+    def _handle_exit(self) -> None:
+        self.close()
+        self.exit_requested.emit()
