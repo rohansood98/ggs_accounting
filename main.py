@@ -38,7 +38,7 @@ def main():
             if login.user_role is None:
                 print("Login failed: user role is None.")
                 continue
-            window = MainWindow(login.user_role)
+            window = MainWindow(login.user_role, db)
             # Track if exit was requested
             exit_flag = {'exit': False}
             def set_exit():

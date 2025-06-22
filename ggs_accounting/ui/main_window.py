@@ -2,6 +2,9 @@ from PyQt6 import QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from ggs_accounting.models.auth import UserRole
+from ggs_accounting.ui.inventory_panel import InventoryPanel
+from ggs_accounting.ui.invoice_panel import InvoicePanel
+from ggs_accounting.db.db_manager import DatabaseManager
 
 class MainWindow(QtWidgets.QMainWindow):
     """Main application shell."""
@@ -9,7 +12,7 @@ class MainWindow(QtWidgets.QMainWindow):
     logout_requested = pyqtSignal()
     exit_requested = pyqtSignal()  # Add a new signal for exit
 
-    def __init__(self, user_role: str) -> None:
+    def __init__(self, user_role: str, db: DatabaseManager = None) -> None:
         super().__init__()
         self._role = UserRole(user_role)
         self.setWindowTitle("Wholesale Billing System")
@@ -20,6 +23,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar().showMessage("Ready")
 
         self._settings_index: int | None = None
+        self._db = db  # Store db for use in panels
         self._init_tabs()
         self._init_menu()
 
@@ -38,7 +42,10 @@ class MainWindow(QtWidgets.QMainWindow):
         exit_action.triggered.connect(self._handle_exit)
 
     def _init_tabs(self) -> None:
-        for name in ["Inventory", "Billing", "Reports", "Backup"]:
+        # Replace placeholders with real panels for Inventory and Billing
+        self._stack.addTab(InventoryPanel(self._db), "Inventory")
+        self._stack.addTab(InvoicePanel(self._db), "Billing")
+        for name in ["Reports", "Backup"]:
             self._stack.addTab(self._create_placeholder(name), name)
         if self._role is UserRole.ADMIN:
             settings_widget = self._create_placeholder("Settings")
