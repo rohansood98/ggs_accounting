@@ -1,0 +1,1 @@
+"GGS Accounting package"
