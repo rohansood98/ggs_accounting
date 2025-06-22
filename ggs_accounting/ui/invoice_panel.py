@@ -35,23 +35,31 @@ class InvoicePanel(QtWidgets.QWidget):
         form = QtWidgets.QFormLayout()
         self.type_combo = QtWidgets.QComboBox()
         self.type_combo.addItems(["Sale", "Purchase"])
+        self.type_combo.currentTextChanged.connect(self._on_type_changed)
         self.date_edit = QtWidgets.QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(date.today())
-        self.buyer_combo = QtWidgets.QComboBox()
-        self.buyer_combo.setEditable(True)
+        self.customer_combo = QtWidgets.QComboBox()
+        self.customer_combo.setEditable(True)
         form.addRow("Type", self.type_combo)
         form.addRow("Date", self.date_edit)
-        form.addRow("Buyer", self.buyer_combo)
+        form.addRow("Customer", self.customer_combo)
         layout.addLayout(form)
 
         add_line_btn = QtWidgets.QPushButton("Add Line")
         add_line_btn.clicked.connect(self._add_line)
         layout.addWidget(add_line_btn)
 
-        # Table: Item, Customer, Qty, Price, Total, Delete
+        # Table: Item, Item Source, Qty, Price, Total, Delete
         self.table = QtWidgets.QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Item", "Customer", "Qty", "Price (₹)", "Total (₹)", "Delete"])
+        self.table.setHorizontalHeaderLabels([
+            "Item",
+            "Item Source",
+            "Qty",
+            "Price (₹)",
+            "Total (₹)",
+            "Delete",
+        ])
         header = self.table.horizontalHeader()
         if header is not None:
             header.setStretchLastSection(True)
@@ -84,8 +92,8 @@ class InvoicePanel(QtWidgets.QWidget):
         self._customers = all_cust
         self._growers = [c for c in all_cust if c.get("customer_type") == "Grower"]
         self._buyers = [c for c in all_cust if c.get("customer_type") != "Grower"]
-        self.buyer_combo.clear()
-        self.buyer_combo.addItems([b["name"] for b in self._buyers])
+        self.customer_combo.clear()
+        self.customer_combo.addItems([b["name"] for b in self._buyers])
 
     def _load_items(self) -> None:
         try:
@@ -101,6 +109,13 @@ class InvoicePanel(QtWidgets.QWidget):
         if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             self._load_customers()
 
+    def _on_type_changed(self, _text: str = "") -> None:
+        is_purchase = self.type_combo.currentText() == "Purchase"
+        for row in range(self.table.rowCount()):
+            widget = self.table.cellWidget(row, 1)
+            if isinstance(widget, QtWidgets.QComboBox):
+                widget.setEnabled(not is_purchase)
+
     # ---- Table helpers ----
     def _add_line(self) -> None:
         row = self.table.rowCount()
@@ -110,11 +125,13 @@ class InvoicePanel(QtWidgets.QWidget):
         item_combo.setEditable(True)
         item_combo.addItems([it["name"] for it in self._items])
         item_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
-        # Customer dropdown (per row, but not tied to item)
-        customer_combo = QtWidgets.QComboBox()
-        customer_combo.setEditable(True)
-        customer_combo.addItems([c["name"] for c in self._growers])
-        customer_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
+        # Item source dropdown per row
+        source_combo = QtWidgets.QComboBox()
+        source_combo.setEditable(True)
+        source_combo.addItems([c["name"] for c in self._growers])
+        source_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
+        if self.type_combo.currentText() == "Purchase":
+            source_combo.setEnabled(False)
         qty_spin = QtWidgets.QDoubleSpinBox()
         qty_spin.setMaximum(1e6)
         qty_spin.setValue(1)
@@ -129,9 +146,9 @@ class InvoicePanel(QtWidgets.QWidget):
         qty_spin.valueChanged.connect(self._recalc_totals)
         price_spin.valueChanged.connect(self._recalc_totals)
         item_combo.currentTextChanged.connect(self._recalc_totals)
-        customer_combo.currentTextChanged.connect(self._recalc_totals)
+        source_combo.currentTextChanged.connect(self._recalc_totals)
         self.table.setCellWidget(row, 0, item_combo)
-        self.table.setCellWidget(row, 1, customer_combo)
+        self.table.setCellWidget(row, 1, source_combo)
         self.table.setCellWidget(row, 2, qty_spin)
         self.table.setCellWidget(row, 3, price_spin)
         self.table.setItem(row, 4, total_item)
@@ -146,32 +163,32 @@ class InvoicePanel(QtWidgets.QWidget):
         items: List[Dict[str, Any]] = []
         for row in range(self.table.rowCount()):
             item_widget = self.table.cellWidget(row, 0)
-            customer_widget = self.table.cellWidget(row, 1)
+            source_widget = self.table.cellWidget(row, 1)
             qty_widget = self.table.cellWidget(row, 2)
             price_widget = self.table.cellWidget(row, 3)
-            if not isinstance(item_widget, QtWidgets.QComboBox) or not isinstance(customer_widget, QtWidgets.QComboBox):
+            if not isinstance(item_widget, QtWidgets.QComboBox) or not isinstance(source_widget, QtWidgets.QComboBox):
                 continue
             item_name = item_widget.currentText().strip()
-            customer_name = customer_widget.currentText().strip()
+            source_name = source_widget.currentText().strip()
             if not item_name:
                 QtWidgets.QMessageBox.warning(self, "Validation", f"Item name required in row {row+1}")
                 return []
-            if not customer_name:
-                QtWidgets.QMessageBox.warning(self, "Validation", f"Customer required in row {row+1}")
+            if not source_name:
+                QtWidgets.QMessageBox.warning(self, "Validation", f"Item source required in row {row+1}")
                 return []
-            # Find or add customer
-            customer = next((c for c in self._growers if c["name"] == customer_name), None)
-            if customer is None:
-                ans = QtWidgets.QMessageBox.question(self, "Add Customer?", f"Customer '{customer_name}' not found. Add new?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
+            # Find or add item source
+            source = next((c for c in self._growers if c["name"] == source_name), None)
+            if source is None:
+                ans = QtWidgets.QMessageBox.question(self, "Add Customer?", f"Customer '{source_name}' not found. Add new?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No)
                 if ans == QtWidgets.QMessageBox.StandardButton.Yes:
                     from ggs_accounting.ui.party_dialog import CustomerDialog
                     dlg = CustomerDialog(self._db)
-                    dlg.name_edit.setText(customer_name)
+                    dlg.name_edit.setText(source_name)
                     if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
                         self._load_customers()
-                        customer = next((c for c in self._growers if c["name"] == customer_name), None)
-                if customer is None:
-                    QtWidgets.QMessageBox.warning(self, "Validation", f"Customer '{customer_name}' not found.")
+                        source = next((c for c in self._growers if c["name"] == source_name), None)
+                if source is None:
+                    QtWidgets.QMessageBox.warning(self, "Validation", f"Item source '{source_name}' not found.")
                     return []
             # Find or add item (independent of customer)
             item = next((it for it in self._items if it["name"] == item_name), None)
@@ -184,7 +201,7 @@ class InvoicePanel(QtWidgets.QWidget):
                             "AUTO",
                             price_excl_tax=cast(QtWidgets.QDoubleSpinBox, price_widget).value(),
                             stock_qty=0.0,
-                            customer_id=customer["customer_id"],
+                            customer_id=source["customer_id"],
                         )
                         self._load_items()
                         item = next((it for it in self._items if it["name"] == item_name), None)
@@ -196,7 +213,7 @@ class InvoicePanel(QtWidgets.QWidget):
                     return []
             quantity = float(cast(QtWidgets.QDoubleSpinBox, qty_widget).value())
             price = float(cast(QtWidgets.QDoubleSpinBox, price_widget).value())
-            items.append({"item_id": item["item_id"], "name": item_name, "customer_id": customer["customer_id"], "quantity": quantity, "price": price})
+            items.append({"item_id": item["item_id"], "name": item_name, "customer_id": source["customer_id"], "quantity": quantity, "price": price})
         return items
 
     def _recalc_totals(self) -> None:
@@ -223,10 +240,10 @@ class InvoicePanel(QtWidgets.QWidget):
             return
         inv_type = self.type_combo.currentText()
         date_str = self.date_edit.date().toString("yyyy-MM-dd")
-        buyer_name = self.buyer_combo.currentText().strip()
+        buyer_name = self.customer_combo.currentText().strip()
         buyer = next((b for b in self._buyers if b["name"] == buyer_name), None)
         if buyer is None:
-            QtWidgets.QMessageBox.warning(self, "Validation", "Select buyer")
+            QtWidgets.QMessageBox.warning(self, "Validation", "Select customer")
             return
         customer_id = buyer["customer_id"]
         try:
